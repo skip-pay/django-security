@@ -5,13 +5,13 @@ from django.conf import settings
 from django.utils.translation import ugettext_lazy as _
 from django.utils import timezone
 from django.template.defaultfilters import truncatechars
-from django.utils.encoding import force_text
+from django.utils.encoding import force_text, smart_text
 
 from json_field.fields import JSONField
 
 from ipware.ip import get_ip
 
-from security.config import LOG_REQUEST_BODY_LENGTH, LOG_RESPONSE_BODY_LENGTH
+from security.config import LOG_REQUEST_BODY_LENGTH, LOG_RESPONSE_BODY_LENGTH, LOG_RESPONSE_BODY_CONTENT_TYPES
 from security.utils import get_headers
 
 
@@ -107,11 +107,13 @@ class LoggedRequest(models.Model):
         self.response_timestamp = timezone.now()
         self.status = self.get_status(response)
         self.response_code = response.status_code
-        if not response.streaming:
+
+        if not response.streaming and response.get('content-type', '').split(';')[0] in LOG_RESPONSE_BODY_CONTENT_TYPES:
             response_body = truncatechars(force_text(response.content[:LOG_RESPONSE_BODY_LENGTH + 1],
                                                      errors='replace'), LOG_RESPONSE_BODY_LENGTH)
         else:
             response_body = ''
+
         self.response_body = response_body
 
     def response_time(self):
