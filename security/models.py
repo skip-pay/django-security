@@ -91,6 +91,8 @@ class LoggedRequest(models.Model):
     def short_path(self):
         return truncatechars(self.path, 20)
     short_path.short_description = _('Path')
+    short_path.filter_by = 'path'
+    short_path.order_by = 'path'
 
     def __unicode__(self):
         return self.short_path()
