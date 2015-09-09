@@ -2,12 +2,19 @@ from importlib import import_module
 
 from django.utils.encoding import force_text
 from django.core.urlresolvers import get_callable
+from django.core.exceptions import ImproperlyConfigured
 
 from ipware.ip import get_ip
 
 from .models import LoggedRequest
 from .exception import ThrottlingException
 from .config import DEFAULT_THROTTLING_VALIDATORS, THROTTLING_FAILURE_VIEW, LOG_IGNORE_IP
+
+try:
+    THROTTLING_VALIDATORS_MODULE, THROTTLING_VALIDATORS_VAR = DEFAULT_THROTTLING_VALIDATORS.rsplit('.', 1)
+    THROTTLING_VALIDATORS = getattr(import_module(THROTTLING_VALIDATORS_MODULE), THROTTLING_VALIDATORS_VAR)
+except ImportError:
+    raise ImproperlyConfigured('Configuration DEFAULT_THROTTLING_VALIDATORS does not contain valid module')
 
 
 class LogMiddleware(object):
@@ -35,7 +42,7 @@ class LogMiddleware(object):
             # Check if throttling is not exempted
             if not getattr(callback, 'throttling_exempt', False):
                 try:
-                    for validator in import_module(DEFAULT_THROTTLING_VALIDATORS).validators:
+                    for validator in THROTTLING_VALIDATORS:
                         validator.validate(request)
                 except ThrottlingException as exception:
                     return self.process_exception(request, exception)

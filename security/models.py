@@ -63,7 +63,7 @@ class LoggedRequest(models.Model):
     objects = LoggedRequestManager()
 
     # Request information
-    request_timestamp = models.DateTimeField(_('Request timestamp'), null=False, blank=False)
+    request_timestamp = models.DateTimeField(_('Request timestamp'), null=False, blank=False, db_index=True)
     method = models.CharField(_('Method'), max_length=7, null=False, blank=False)
     path = models.CharField(_('URL path'), max_length=255, null=False, blank=False)
     queries = JSONField(_('Queries'), null=True, blank=True)
