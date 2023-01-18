@@ -10,7 +10,7 @@ def read(fname):
 
 
 setup(
-    name='django-security-logger',
+    name='skip-django-security-logger',
     long_description=read('README.rst'),
     long_description_content_type='text/x-rst',
     version=get_version(),
@@ -18,7 +18,7 @@ setup(
     keywords='django, throttling',
     author='Lubos Matl',
     author_email='matllubos@gmail.com',
-    url='https://github.com/druids/django-security',
+    url='https://github.com/skip-pay/django-security',
     license='MIT',
     package_dir={'security': 'security'},
     include_package_data=True,
@@ -40,10 +40,10 @@ setup(
         'django>=3.1,<4.0',
         'django-ipware>=3.0.2',
         'ansi2html>=1.6.0',
-        'django-chamber>=0.6.16',
-        'django-choice-enumfields>=1.1.2',
-        'django-generic-m2m-field>=0.0.9',
-        'django-celery-extensions>=0.0.37',
+        'skip-django-chamber>=0.6.16.3',
+        'skip-django-choice-enumfields>=1.1.3.2',
+        'skip-django-generic-m2m-field>=0.0.9.3',
+        'skip-django-celery-extensions>=0.0.37.1',
         'isodate>=0.6.1',
     ],
     zip_safe=False

@@ -9,7 +9,7 @@ Installation
 
 .. code:: bash
 
-    pip install django-security-logger
+    pip install skip-django-security-logger
 
 
 Docs
