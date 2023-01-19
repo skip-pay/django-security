@@ -94,7 +94,7 @@ For test purposes you will need to configure both databases to be tested::
         databases = ('default', 'log')
 
 
-The second solution is have second storage for logs in this case you will use ``MultipleDBSecurityLoggerRouter``::
+The second solution is have a independent database for logs in this case you can use ``MultipleDBSecurityLoggerRouter``::
 
     DATABASES = {
         'default': {
@@ -130,18 +130,45 @@ Elasticsearch backend can be configured via ``SECURITY_ELASTICSEARCH_DATABASE`` 
     }
 
 
-For elasticsearch database initialization you must run ``./manage.py init_elasticsearch_log`` command.
+For elasticsearch database initialization you must run ``./manage.py init_elasticsearch_log`` command to create indexes in the database.
+
+There are two ways how to store logs in the elasticsearch: direct connection or via logstash. Direct connection is defined by default and no extra configuration is not required. For the logstash solution you need to allow configuration ``SECURITY_ELASTICSEARCH_LOGSTASH_WRITER``::
+
+    SECURITY_ELASTICSEARCH_LOGSTASH_WRITER = True
+
+
+Now you have to run logstash with configuration defined in ``logstash.example.conf``.
+
+Django will send data to the logstash via logger with this settings::
+
+    LOGGING.update({
+        'handlers': {
+            ...
+            'logstash': {
+                'level': 'INFO',
+                'class': 'security.backends.elasticsearch.logstash.handler_tcp.TCPLogstashHandler',
+                'host': 'logstash',
+                'port': 5044,
+                'formatter': 'logstash',
+            },
+            ...
+        },
+        'loggers': {
+            ...
+            'security.logstash': {
+                'handlers': ['logstash'],
+                'level': 'INFO',
+                'propagate': False,
+            },
+        }
+
 
 Testing backend
 ---------------
 
-For testing purposes you can use `'security.backends.testing'` and add it to the installed apps::
+For testing purposes you can use `'security.backends.testing'` and turn off log writers::
 
-    INSTALLED_APPS = (
-        ...
-        'security.backends.testing',
-        ...
-    )
+    SECURITY_BACKEND_WRITERS = []  # Turn off log writers
 
 Your test you can surround with `security.backends.testing.capture_security_logs` decorator/context processor::
 
@@ -153,11 +180,12 @@ Your test you can surround with `security.backends.testing.capture_security_logs
             assert_length_equal(logged_data.command, 1)
             assert_length_equal(logged_data.celery_task_invocation, 1)
             assert_length_equal(logged_data.celery_task_run, 1)
+            assert_equal(logged_data.input_request[0].request_body, 'test')
 
 Readers
 -------
 
-Some ``elasticsearch``, ``sql`` and ``testing`` backends can be used as readers too. You can use these helpers to get data from it:
+Some ``elasticsearch``, ``sql`` and ``testing`` backends can be used as readers too. You can use these helpers to get data from these backends (no matter which wan is set):
 
 * ``security.backends.reader.get_count_input_requests(from_time, ip=None, path=None, view_slug=None, slug=None, method=None, exclude_log_id=None)`` - to get count input requests with input arguments
 * ``security.backends.reader.get_logs_related_with_object(logger_name, related_object)`` - to get list of logs which are related with object
