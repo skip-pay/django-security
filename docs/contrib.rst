@@ -56,3 +56,21 @@ Do not forget turn on django DEBUG.
 To show results in ``django-is-core`` you must set setting::
 
     SECURITY_SHOW_DEBUG_TOOLBAR = True
+
+
+django-is-core
+--------------
+
+Backends ``elasticsearch`` and ``sql`` provide prepared django-is-core administration. If you are using django-is-core library you can find admin core classes in:
+* elasticsearch - ``security.elasticsearch.is_core.cores``
+    * ``InputRequestLogCore``
+    * ``OutputRequestLogCore``
+    * ``CommandLogCore``
+    * ``CeleryTaskRunLogCore``
+    * ``CeleryTaskInvocationLogCore``
+* sql - ``security.sql.is_core.cores``
+    * ``InputRequestLogCore``
+    * ``OutputRequestLogCore``
+    * ``CommandLogCore``
+    * ``CeleryTaskRunLogCore``
+    * ``CeleryTaskInvocationLogCore``
