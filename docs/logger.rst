@@ -8,8 +8,8 @@ Input requests
 
 Input requests are logged automatically with ``security.middleware.LogMiddleware``. The middleware creates ``security.models.InputLoggedRequest`` object before sending request to next middleware. Response data to the logged requests are completed in the end. You can found logged request in the Django request objects with that way ``request.input_logged_request``.
 
-Decorators
-^^^^^^^^^^
+View decorators
+^^^^^^^^^^^^^^^
 
 There are several decorators for views and generic views that can be used for view logging configuration:
 
@@ -28,29 +28,43 @@ Logging of output requests is a little bit complicated and is related to the way
 requests
 ^^^^^^^^
 
-The first method is used for logging simple HTTP requests using ``requests`` library. The only change necessary is to import ``from security.transport import security_requests as requests`` instead of ``import requests``. Same methods (get, post, put, ..) are available as in the requests library. Every method has two extra optional parameters:
+The first method is used for logging simple HTTP requests using ``requests`` library. The only change necessary is to import ``from security import requests`` instead of ``import requests``. Same methods (get, post, put, ..) are available as in the requests library. Every method has two extra optional parameters:
 
 * ``slug`` - text slug that is stored with the logged request to tag concrete logged value
 * ``related_objects`` - list or tuple of related objects that will be related with output logged request
 
+Example where user is stored in the related objects and log slug is set to the value ``'request'``::
+
+    from security import requests
+    from users.models import User
+
+    user = User.objects.first()
+    requests.get('https:///github.com/druids/', slug='request', related_objects=[user])
+
 suds
 ^^^^
 
-For SOAP based clients there are extensions to the ``suds`` library. You must only use ``security.transport.security_suds.Client`` class without standard suds client or ``security.transport.security_suds.SecurityRequestsTransport`` with standard suds client object.
-As init data of ``security.transport.security_suds.SecurityRequestsTransport`` you can send ``slug`` and ``related_objects``.
-The ``security.transport.security_suds.Client`` has ``slug`` as initial parameter bug related objects must be added via ``add_related_objects(self, *related_objects)`` method.
+For SOAP based clients there are extensions to the ``suds`` library. You must only use ``security.suds.Client`` class without standard suds client or ``security.suds.SecurityRequestsTransport`` with standard suds client object.
+As init data of ``security.suds.SecurityRequestsTransport`` you can send ``slug`` and ``related_objects``.
+The ``security.suds.Client`` has ``slug`` and ``related_objects`` input parameter::
+
+    from security.suds import Client
+    from users.models import User
+
+    user = User.objects.first()
+    client = Client('http://your.service.url, slug='suds', related_objects=[user])
 
 Decorators/context processors
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``security.decorators.atomic_log`` - because logged requests are stored in models, they are subject to rollback, if you are using transactions. To solve this problem you can use this decorator before Django ``transaction.atomic`` decorator. The logs are stored on the end of the transaction (even with raised exception). Decorator can be nested, logs are saved only with the last decorator. If you want to join a object with output request log you can use this decorator too. In the example user is logged with output request::
+``security.decorators.log_with_data`` - because logged requests are stored in models, they are subject to rollback, if you are using transactions. To solve this problem you can use this decorator before Django ``transaction.atomic`` decorator. The logs are stored on the end of the transaction (even with raised exception). Decorator can be nested, logs are saved only with the last decorator. If you want to join a object with output request log you can use this decorator too. In the example user is logged with output request::
 
     from security.decorators import atomic_log
-    from security.transport import security_requests as requests
+    from security import requests
 
     user = User.objects.first()
-    with atomic_log(output_requests_slug='github-request', output_requests_related_objects=[user]):
-        requests.get('https:///github.com/druids/')
+    with log_with_data(slug='github-request', output_requests_related_objects=[user], extra_data={'extra': 'data'}):
+        requests.get('https://github.com/druids/')
 
 
 
@@ -103,7 +117,7 @@ If you want to call command from code, you should use ``security.management.call
 Celery tasks log
 ----------------
 
-If you want to log celery tasks you must firsly install celery library (celery==4.3.0). Then you must define your task as in example::
+If you want to log celery tasks you must install celery library (``celery>=5``). Then you must use ``security.task import LoggedTask`` as a base class of your celery task, example::
 
     from security.task import LoggedTask
 
@@ -114,4 +128,4 @@ If you want to log celery tasks you must firsly install celery library (celery==
     def sum_task(self, task_id, a, b):
         return a + b
 
-Task result will be automatically logged to the ``security.models.CeleryTaskLog``.
+Task result will be automatically logged to the log.
