@@ -15,7 +15,8 @@ class ConnectionHandler:
                 raise ImproperlyConfigured('You must set "SECURITY_ELASTICSEARCH_DATABASE" setting')
 
             connection.connection = connections.create_connection(
-                **settings.ELASTICSEARCH_DATABASE
+                **settings.ELASTICSEARCH_DATABASE,
+                timeout=settings.ELASTICSEARCH_TIMEOUT,
             )
             if init_documents:
                 self.init_documents()
