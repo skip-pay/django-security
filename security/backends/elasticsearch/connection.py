@@ -23,11 +23,15 @@ class ConnectionHandler:
 
     def init_documents(self):
         from security.backends.elasticsearch.models import (
-            InputRequestLog, OutputRequestLog, CommandLog, CeleryTaskRunLog, CeleryTaskInvocationLog
+            InputRequestLog, OutputRequestLog, CommandLog, CeleryTaskRunLog, CeleryTaskInvocationLog, PartitionedLog
         )
 
         for document in InputRequestLog, OutputRequestLog, CommandLog, CeleryTaskRunLog, CeleryTaskInvocationLog:
-            document.init()
+            if issubclass(document, PartitionedLog):
+                template = document.get_template()
+                template.save()
+            else:
+                document.init()
 
 
 connection = ConnectionHandler()

@@ -3,6 +3,7 @@ from uuid import uuid4
 from django.test.utils import override_settings
 
 from .models import CommandLog, CeleryTaskRunLog, CeleryTaskInvocationLog, InputRequestLog, OutputRequestLog
+from .models import PartitionedLog
 
 
 class store_elasticsearch_log(override_settings):
@@ -21,7 +22,11 @@ class store_elasticsearch_log(override_settings):
         for document_class in (CommandLog, CeleryTaskRunLog, CeleryTaskInvocationLog,
                                InputRequestLog, OutputRequestLog):
             document_class._index._name = f'{uuid}.{document_class._index._name}'
-            document_class.init()
+            if issubclass(document_class, PartitionedLog):
+                template = document_class.get_template()
+                template.save()
+            else:
+                document_class.init()
 
     def disable(self):
         for document_class in (CommandLog, CeleryTaskRunLog, CeleryTaskInvocationLog,

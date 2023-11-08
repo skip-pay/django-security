@@ -1,5 +1,5 @@
 import json
-
+from datetime import datetime
 from elasticsearch import NotFoundError
 
 from django.db import router
@@ -23,11 +23,15 @@ from security.enums import (
 from .connection import set_connection
 
 
-def get_index_name(logger_name):
-    return '{}-{}-log'.format(
+def get_index_name(logger_name, partitioned=True):
+    index_name = '{}-{}-log'.format(
         settings.ELASTICSEARCH_DATABASE.get('prefix', 'security'),
         logger_name.value,
     )
+    if partitioned:
+        index_name += '*'
+
+    return index_name
 
 
 class JSONTextField(CustomField):
@@ -111,7 +115,36 @@ class Log(LogShortIdMixin, Document):
             )
 
 
-class RequestLog(Log):
+class PartitionedLog(Log):
+
+    DAY_FORMAT = "%Y-%m-%d"
+
+    def save(self, **kwargs):
+        # assign now if no timestamp given
+        if not self.start:
+            self.start = datetime.now()
+
+        # override the index to go to the proper timeslot
+        kwargs['index'] = self._format_index_name(self.start)
+        return super().save(**kwargs)
+
+    @classmethod
+    def get(cls, *args, **kwargs):
+        now = datetime.now()
+        kwargs['index'] = cls._format_index_name(now)
+        return super().get(*args, **kwargs)
+
+    @classmethod
+    def _format_index_name(cls, dt):
+        return dt.strftime(f'{cls._index._name.replace("*", "")}-%Y-%m-%d')
+
+    @classmethod
+    def get_template(cls):
+        index_name = cls._index._name.split("*")[0]
+        return cls._index.as_template(index_name, order=0)
+
+
+class RequestLog(PartitionedLog):
 
     host = Keyword()
     method = Keyword()
@@ -152,7 +185,7 @@ class OutputRequestLog(OutputRequestLogStrMixin, RequestLog):
         name = get_index_name(LoggerName.OUTPUT_REQUEST)
 
 
-class CommandLog(CommandLogStrMixin, Log):
+class CommandLog(CommandLogStrMixin, PartitionedLog):
 
     name = Keyword()
     input = Text()
@@ -166,7 +199,7 @@ class CommandLog(CommandLogStrMixin, Log):
         name = get_index_name(LoggerName.COMMAND)
 
 
-class CeleryTaskInvocationLog(CeleryTaskInvocationLogStrMixin, Log):
+class CeleryTaskInvocationLog(CeleryTaskInvocationLogStrMixin, PartitionedLog):
 
     celery_task_id = Keyword()
     name = Keyword()
@@ -195,7 +228,7 @@ class CeleryTaskInvocationLog(CeleryTaskInvocationLogStrMixin, Log):
         name = get_index_name(LoggerName.CELERY_TASK_INVOCATION)
 
 
-class CeleryTaskRunLog(CeleryTaskRunLogStrMixin, Log):
+class CeleryTaskRunLog(CeleryTaskRunLogStrMixin, PartitionedLog):
 
     celery_task_id = Keyword()
     state = EnumField(enum=CeleryTaskRunLogState)
