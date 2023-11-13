@@ -199,7 +199,7 @@ class LogstashElasticsearchDataWriter(BaseElasticsearchDataWriter):
         return json.dumps(serialized_data, cls=DjangoJSONEncoder)
 
     def _get_log_message(self, logger_id, logger_name, version, data):
-        return f'{get_index_name(logger_name)} {version} {logger_id} {self._serialize_data(data)}'
+        return f'{get_index_name(logger_name, partitioned=False)} {version} {logger_id} {self._serialize_data(data)}'
 
     def _get_logger_message(self, logger, last_version=False, **extra_data):
         if last_version:
