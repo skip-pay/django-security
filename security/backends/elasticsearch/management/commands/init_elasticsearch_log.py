@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from security.backends.elasticsearch.connection import set_connection
 from security.backends.elasticsearch.models import (
-    InputRequestLog, OutputRequestLog, CommandLog, CeleryTaskRunLog, CeleryTaskInvocationLog
+    InputRequestLog, OutputRequestLog, CommandLog, CeleryTaskRunLog, CeleryTaskInvocationLog, PartitionedLog,
 )
 
 
@@ -28,5 +28,9 @@ class Command(BaseCommand):
         self.stdout.write('Init elasticsearch logs')
         set_connection(init_documents=False)
         for document in InputRequestLog, OutputRequestLog, CommandLog, CeleryTaskRunLog, CeleryTaskInvocationLog:
-            document._index.delete(ignore=404)
-            document.init()
+            if issubclass(document, PartitionedLog):
+                template = document.get_template()
+                template.save()
+            else:
+                document._index.delete(ignore=404)
+                document.init()

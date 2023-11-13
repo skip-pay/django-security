@@ -120,3 +120,10 @@ class CommandTestCase(BaseTestCaseMixin, ClientTestCase):
                     ).count(), 0)
                 assert_equal(len(os.listdir(log_directory)), 1)
         shutil.rmtree(settings.BACKUP_STORAGE_PATH)
+
+    @override_settings(
+        SECURITY_COMMAND_LOG_EXCLUDED_COMMANDS={'init_elasticsearch_log'},
+        SECURITY_BACKUP_STORAGE_PATH=os.path.join(django_settings.PROJECT_DIR, 'var', 'backup_elastic')
+    )
+    def test_init_elasticsearch_logs(self):
+        test_call_command('init_elasticsearch_log', interactive=False)
