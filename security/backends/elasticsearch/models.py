@@ -22,6 +22,8 @@ from security.enums import (
 
 from .connection import set_connection
 
+WILDCARD = '*'
+
 
 def get_index_name(logger_name, partitioned=True):
     index_name = '{}-{}-log'.format(
@@ -29,7 +31,7 @@ def get_index_name(logger_name, partitioned=True):
         logger_name.value,
     )
     if partitioned:
-        index_name += '*'
+        index_name += WILDCARD
 
     return index_name
 
@@ -114,6 +116,10 @@ class Log(LogShortIdMixin, Document):
                 scripted_upsert, upsert, return_doc_meta, **fields
             )
 
+    @classmethod
+    def is_partitioned(cls):
+        return '*' in cls._index._name
+
 
 class PartitionedLog(Log):
 
@@ -142,6 +148,14 @@ class PartitionedLog(Log):
     def get_template(cls):
         index_name = cls._index._name.split("*")[0]
         return cls._index.as_template(index_name, order=0)
+
+    @classmethod
+    def init(cls, *_, **__):
+        """
+        Create the index and populate the mappings in elasticsearch.
+        """
+        template = cls.get_template()
+        template.save()
 
 
 class RequestLog(PartitionedLog):
