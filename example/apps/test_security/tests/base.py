@@ -1,14 +1,12 @@
 import json
-
 from io import StringIO
-
-from contextlib import contextmanager
 
 from django.contrib.auth.models import User
 
 from germanium.decorators import data_provider
 from germanium.tools import assert_equal, assert_false, assert_is_not_none
 
+from security.backends.elasticsearch.models import PartitionedLog
 from security.management import call_command
 
 
@@ -18,6 +16,10 @@ TRUNCATION_CHAR = '…'
 class BaseTestCaseMixin:
 
     databases = ['default', 'security']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        PartitionedLog.INSTANT_REFRESH = True
 
     @data_provider
     def create_user(self, username='test', email='test@localhost'):
