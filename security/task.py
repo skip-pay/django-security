@@ -144,7 +144,8 @@ class LoggedTask(DjangoTask):
             finally:
                 self.request.run_logger.close()
 
-        logger.error(
+        # The exception is logged separately. This log is complementary, so it's OK to use warning only.
+        logger.warning(
             f'Task with name {self.name} raised exception',
             extra={
                 'einfo': str(einfo),
