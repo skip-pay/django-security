@@ -124,6 +124,7 @@ class Log(LogShortIdMixin, Document):
 class PartitionedLog(Log):
 
     DAY_FORMAT = "%Y-%m-%d"
+    INSTANT_REFRESH = False  # WARNING: OVERRIDE THIS ONLY FOR TESTS
 
     def save(self, **kwargs):
         # assign now if no timestamp given
@@ -132,13 +133,18 @@ class PartitionedLog(Log):
 
         # override the index to go to the proper timeslot
         kwargs['index'] = self._format_index_name(self.start)
+
+        # convenience for tests, to get rid of refresh latency
+        if self.INSTANT_REFRESH:
+            kwargs['refresh'] = self.INSTANT_REFRESH
+
         return super().save(**kwargs)
 
     @classmethod
-    def get(cls, *args, **kwargs):
-        now = datetime.now()
-        kwargs['index'] = cls._format_index_name(now)
-        return super().get(*args, **kwargs)
+    def get(cls, id, *_, **__):
+        search = cls.search().query("term", _id=id)
+        response = search.execute()
+        return response.hits[0] if response.hits else None
 
     @classmethod
     def _format_index_name(cls, dt):
