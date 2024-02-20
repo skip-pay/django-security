@@ -58,10 +58,10 @@ View
 If ``security.throttling.exception.ThrottlingException`` is raised the specific error view is returned. You can change it with only overriding template named 429.html in your templates. With setting ``SECURITY_THROTTLING_FAILURE_VIEW`` you can change view function which default code is::
 
     from django.shortcuts import render
-    from django.utils.encoding import force_text
+    from django.utils.encoding import force_str
 
 
     def throttling_failure_view(request, exception):
-        response = render(request, '429.html', {'description': force_text(exception)})
+        response = render(request, '429.html', {'description': force_str(exception)})
         response.status_code = 429
         return response

@@ -4,7 +4,7 @@ import responses
 
 from django import get_version
 from django.test import override_settings
-from django.utils.encoding import force_text
+from django.utils.encoding import force_str
 
 from germanium.decorators import data_consumer
 from germanium.test_cases.client import ClientTestCase
@@ -186,7 +186,7 @@ class InputRequestLogTestCase(BaseTestCaseMixin, ClientTestCase):
     def test_response_body_truncation_should_be_turned_off(self):
         with capture_security_logs() as logged_data:
             response = self.post('/admin/login/', data={'username': 2000 * 'a', 'password': 2000 * 'b'})
-            assert_equal(logged_data.input_request[0].response_body, force_text(response.content))
+            assert_equal(logged_data.input_request[0].response_body, force_str(response.content))
             assert_false(logged_data.input_request[0].response_body.endswith(TRUNCATION_CHAR))
 
     @override_settings(SECURITY_LOG_RESPONSE_BODY_CONTENT_TYPES=())

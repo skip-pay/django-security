@@ -5,7 +5,7 @@ from apps.test_security.views import (
     error_view
 )
 
-from django.conf.urls import url
+from django.urls import re_path as url
 
 
 urlpatterns = [

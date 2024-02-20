@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.db import router
 from django.db.models import TextField
 from django.db.models.functions import Cast
-from django.utils.translation import ugettext
+from django.utils.translation import gettext
 from django.contrib.contenttypes.models import ContentType
 
 from elasticsearch_dsl import Q
@@ -30,7 +30,7 @@ class UsernameUserFilter(ElasticsearchFilter):
         )
 
         if queryset[:settings.ELASTICSEARCH_MAX_NUMBER_OF_TERMS].count() > settings.ELASTICSEARCH_MAX_NUMBER_OF_TERMS:
-            raise FilterValueError(ugettext('Too many users found for specified username.'))
+            raise FilterValueError(gettext('Too many users found for specified username.'))
 
         return list(queryset.values_list('str_id', flat=True))
 
@@ -54,7 +54,7 @@ class EnumElasticsearchFilter(ElasticsearchFilter):
             return self._enum[value]
         except KeyError:
             raise FilterValueError(
-                ugettext('Invalid value. Please use one of the following values: {}.').format(
+                gettext('Invalid value. Please use one of the following values: {}.').format(
                     ', '.join([a.name for a in self._enum])
                 )
             )
@@ -88,7 +88,7 @@ class RelatedObjectsFilter(ElasticsearchFilter):
                     get_key_from_content_type_object_id_and_model_db(model_db, content_type_id, object_id)
                 )
             except (ValueError, ContentType.DoesNotExist):
-                raise FilterValueError(ugettext('Invalid value.'))
+                raise FilterValueError(gettext('Invalid value.'))
         return cleaned_values
 
     def get_filter_term(self, value, operator_slug, request):
