@@ -4,7 +4,7 @@ import operator
 from django.contrib.auth import get_user_model
 from django.db.models import TextField, Q
 from django.db.models.functions import Cast
-from django.utils.translation import ugettext
+from django.utils.translation import gettext
 from django.contrib.contenttypes.models import ContentType
 
 from pyston.filters.django_filters import SimpleMethodFilter
@@ -41,7 +41,7 @@ class RelatedObjectsFilter(SimpleMethodFilter):
                 content_type_id, object_id = v.split('|')
                 cleaned_values.append((int(content_type_id), object_id))
             except (ValueError, ContentType.DoesNotExist):
-                raise FilterValueError(ugettext('Invalid value.'))
+                raise FilterValueError(gettext('Invalid value.'))
         return cleaned_values
 
     def get_filter_term(self, value, operator_slug, request):

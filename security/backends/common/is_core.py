@@ -4,7 +4,7 @@ from ansi2html import Ansi2HTMLConverter
 
 from django.contrib.contenttypes.models import ContentType
 from django.template.defaultfilters import truncatechars
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from django.utils.html import mark_safe
 
 from chamber.shortcuts import get_object_or_none

@@ -114,10 +114,10 @@ INSTALLED_APPS = (
     # apps
     'django_celery_extensions',
     'security',
-    'security.backends.sql',
-    'security.backends.logging',
-    'security.backends.elasticsearch',
-    'security.backends.testing',
+    'security.backends.sql.app.SecuritySQLBackend',
+    'security.backends.logging.app.SecurityLoggingBackend',
+    'security.backends.elasticsearch.app.SecurityElasticsearchBackend',
+    'security.backends.testing.app.SecurityTestingBackend',
     'reversion',
     'apps.test_security',
 )

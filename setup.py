@@ -37,13 +37,13 @@ setup(
         'Topic :: Internet :: WWW/HTTP :: Site Management',
     ],
     install_requires=[
-        'django>=3.1,<4.0',
+        'django>=4.2',
         'django-ipware>=3.0.2',
         'ansi2html>=1.6.0',
-        'skip-django-chamber>=0.6.16.3',
+        'skip-django-chamber>=0.7.2',
         'skip-django-choice-enumfields>=1.1.3.2',
-        'skip-django-generic-m2m-field>=0.0.9.3',
-        'skip-django-celery-extensions>=0.0.37.1',
+        'skip-django-generic-m2m-field>=0.1.0',
+        'skip-django-celery-extensions>=0.1.0',
         'isodate>=0.6.1',
     ],
     zip_safe=False

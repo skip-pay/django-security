@@ -6,7 +6,7 @@ from urllib.parse import parse_qs, urlparse
 from json import JSONDecodeError
 
 from django.template.defaultfilters import truncatechars
-from django.utils.encoding import force_text
+from django.utils.encoding import force_str
 
 from security.config import settings
 from security.utils import remove_nul_from_string
@@ -88,7 +88,7 @@ def truncate_json_data(data):
 
 
 def truncate_body(content, max_length):
-    content = force_text(content, errors='replace')
+    content = force_str(content, errors='replace')
     if len(content) > max_length:
         try:
             json_content = json.loads(content)
@@ -106,7 +106,7 @@ def truncate_body(content, max_length):
 def clean_body(body, max_length):
     if body is None:
         return body
-    body = force_text(body, errors='replace')
+    body = force_str(body, errors='replace')
     cleaned_body = truncatechars(
         truncate_body(body, max_length), max_length + len(settings.SENSITIVE_DATA_REPLACEMENT)
     ) if max_length is not None else str(body)

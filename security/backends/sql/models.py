@@ -3,7 +3,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
-from django.utils.encoding import force_text
+from django.utils.encoding import force_str
 from django.utils.functional import cached_property
 from django.utils.timezone import localtime
 
@@ -162,7 +162,7 @@ class RequestLog(Log):
 
     def __str__(self):
         return ' '.join(
-            (force_text(v) for v in (
+            (force_str(v) for v in (
                 self.slug, self.response_code, localtime(self.start.replace(microsecond=0))
             ) if v)
         )
