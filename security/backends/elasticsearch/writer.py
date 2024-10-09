@@ -2,6 +2,7 @@ import os
 import json
 import gzip
 import logging
+import structlog
 import time as time_sleep
 
 from itertools import islice, chain
@@ -37,6 +38,8 @@ from .models import (
 
 
 logstash_logger = logging.getLogger('security.logstash')
+vector_logger = structlog.getLogger("security.vector")
+
 
 MAX_VERSION = 9999
 
@@ -185,7 +188,7 @@ class DirectElasticsearchDataWriter(BaseElasticsearchDataWriter):
         logger.backend_logs['last_elasticsearch_version'] = version
 
 
-class LogstashElasticsearchDataWriter(BaseElasticsearchDataWriter):
+class LogstashAndVectorElasticsearchDataWriter(BaseElasticsearchDataWriter):
 
     def _serialize_data(self, data):
         serialized_data = {}
@@ -198,10 +201,18 @@ class LogstashElasticsearchDataWriter(BaseElasticsearchDataWriter):
                 serialized_data[k] = v
         return json.dumps(serialized_data, cls=DjangoJSONEncoder)
 
-    def _get_log_message(self, logger_id, logger_name, version, data):
-        return f'{get_index_name(logger_name, partitioned=False)} {version} {logger_id} {self._serialize_data(data)}'
+    def _get_log_data(self, logger_id, logger_name, version, data):
+        return dict(
+            index_name=get_index_name(logger_name, partitioned=False),
+            version=version,
+            logger_id=logger_id,
+            **data,
+        )
 
-    def _get_logger_message(self, logger, last_version=False, **extra_data):
+    def _format_log_message(self, index_name, version, logger_id, **data):
+        return f"{index_name} {version} {logger_id} {self._serialize_data(data)}"
+
+    def _get_logger_data(self, logger, last_version=False, **extra_data):
         if last_version:
             version = MAX_VERSION
         elif 'last_elasticsearch_version' in logger.backend_logs:
@@ -214,7 +225,7 @@ class LogstashElasticsearchDataWriter(BaseElasticsearchDataWriter):
         logger_data.update(extra_data)
 
         logger.backend_logs['last_elasticsearch_version'] = version
-        return self._get_log_message(
+        return self._get_log_data(
             logger.id,
             logger.logger_name,
             version,
@@ -222,34 +233,30 @@ class LogstashElasticsearchDataWriter(BaseElasticsearchDataWriter):
         )
 
     def create_or_update_index_from_logger(self, logger, is_last=False, **extra_data):
-        logstash_logger.info(
-            self._get_logger_message(
-                logger,
-                last_version=is_last,
-                **extra_data
-            )
-        )
+        logger_data = self._get_logger_data(logger, last_version=is_last, **extra_data)
+        if settings.ELASTICSEARCH_LOGSTASH_WRITER:
+            logstash_logger.info(self._format_log_message(**logger_data))
+        if settings.ELASTICSEARCH_VECTOR_WRITER:
+            vector_logger.info("", **logger_data)
 
     def update_index(self, index, **updated_data):
         data = self._get_index_data(index)
         data.update(updated_data)
         logger_name = {v: k for k, v in logger_name_to_log_model.items()}[index.__class__]
-        logstash_logger.info(
-            self._get_log_message(
-                index.id,
-                logger_name,
-                MAX_VERSION,
-                data
-            )
-        )
+        log_data = self._get_log_data(index.id, logger_name, MAX_VERSION, data)
+        if settings.ELASTICSEARCH_LOGSTASH_WRITER:
+            logstash_logger.info(self._format_log_message(**log_data))
+        if settings.ELASTICSEARCH_VECTOR_WRITER:
+            vector_logger.info("", **self._get_log_data(index.id, logger_name, MAX_VERSION, data))
 
 
 class ElasticsearchBackendWriter(BaseBackendWriter):
 
     def get_data_writer(self):
+        use_log_writer = settings.ELASTICSEARCH_LOGSTASH_WRITER or settings.ELASTICSEARCH_VECTOR_WRITER
         return (
-            LogstashElasticsearchDataWriter()
-            if settings.ELASTICSEARCH_LOGSTASH_WRITER else DirectElasticsearchDataWriter()
+            LogstashAndVectorElasticsearchDataWriter()
+            if use_log_writer else DirectElasticsearchDataWriter()
         )
 
     def input_request_started(self, logger):

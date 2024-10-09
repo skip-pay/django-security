@@ -1,5 +1,11 @@
 # Django settings.
 import os
+import json
+from enum import Enum
+
+import structlog
+
+from django.core.serializers.json import DjangoJSONEncoder
 
 
 PROJECT_DIR = os.path.abspath(
@@ -121,6 +127,34 @@ INSTALLED_APPS = (
     'reversion',
     'apps.test_security',
 )
+
+
+def _json_serializer(data, **kwargs):
+    serialized_data = {}
+    for k, v in data.items():
+        if isinstance(v, Enum):
+            serialized_data[k] = v.name
+        else:
+            serialized_data[k] = v
+    return json.dumps(serialized_data, cls=DjangoJSONEncoder)
+
+
+structlog.configure(
+    processors=[
+        structlog.processors.EventRenamer("message"),
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.JSONRenderer(_json_serializer),
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+
 
 # A sample logging configuration. The only tangible logging
 # performed by this configuration is to send an email to
