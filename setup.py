@@ -45,6 +45,7 @@ setup(
         'skip-django-generic-m2m-field>=0.1.0',
         'skip-django-celery-extensions>=0.1.0',
         'isodate>=0.6.1',
+        'structlog>=24.4.0',
     ],
     zip_safe=False
 )

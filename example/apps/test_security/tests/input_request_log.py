@@ -28,7 +28,7 @@ from security.backends.signals import (
 from security.backends.testing import capture_security_logs
 from security.utils import get_object_triple
 
-from .base import BaseTestCaseMixin, TRUNCATION_CHAR, assert_equal_logstash, assert_equal_log_data
+from .base import BaseTestCaseMixin, TRUNCATION_CHAR, assert_equal_logstash, assert_equal_log_data, assert_equal_vector
 
 
 @override_settings(SECURITY_BACKEND_WRITERS={}, SECURITY_LOG_RESPONSE_BODY_CONTENT_TYPES=None)
@@ -407,6 +407,61 @@ class InputRequestLogTestCase(BaseTestCaseMixin, ClientTestCase):
                         response_log_expected_data
                     )
 
+    @store_elasticsearch_log(SECURITY_ELASTICSEARCH_VECTOR_WRITER=True)
+    @data_consumer('create_user')
+    def test_input_request_to_homepage_should_be_logged_in_elasticsearch_backend_through_vector(self, user):
+        with log_with_data(related_objects=[user]):
+            with capture_security_logs() as logged_data:
+                with self.assertLogs('security.vector', level='INFO') as cm:
+                    assert_http_ok(self.get('/home/?name=value'))
+                    input_request_log = logged_data.input_request[0]
+                    assert_equal(len(cm.output), 2)
+                    request_log, response_log = cm.output
+
+                    request_log_expected_data = {
+                        'slug': None,
+                        'release': None,
+                        'related_objects': ['|'.join(str(v) for v in get_object_triple(user))],
+                        'extra_data': {},
+                        'parent_log': None,
+                        'request_headers': {"Cookie": "[Filtered]"},
+                        'request_body': '',
+                        'user_id': None,
+                        'method': 'GET',
+                        'host': 'testserver',
+                        'path': '/home/',
+                        'queries': {"name": "value"},
+                        'is_secure': False,
+                        'ip': '127.0.0.1',
+                        'start': not_none_eq_obj,
+                        'view_slug': 'home',
+                        'state': 'INCOMPLETE'
+                    }
+                    response_log_expected_data = {
+                        **request_log_expected_data,
+                        'state': 'INFO',
+                        'stop': not_none_eq_obj,
+                        'time': not_none_eq_obj,
+                        'response_body': 'home page response',
+                        'response_code': 200,
+                        'response_headers': {"Content-Type": "text/html; charset=utf-8", "X-Frame-Options": "DENY"},
+                    }
+
+                    assert_equal_vector(
+                        request_log,
+                        'security-input-request-log',
+                        0,
+                        input_request_log.id,
+                        request_log_expected_data
+                    )
+                    assert_equal_vector(
+                        response_log,
+                        'security-input-request-log',
+                        9999,
+                        input_request_log.id,
+                        response_log_expected_data
+                    )
+
     @override_settings(SECURITY_BACKEND_WRITERS={'logging'})
     def test_input_request_to_homepage_should_be_logged_in_logging_backend(self):
         with capture_security_logs() as logged_data:
@@ -516,6 +571,71 @@ class InputRequestLogTestCase(BaseTestCaseMixin, ClientTestCase):
                     error_log_expoected_data
                 )
                 assert_equal_logstash(
+                    response_log,
+                    'security-input-request-log',
+                    9999,
+                    input_request_log.id,
+                    response_log_expected_data
+                )
+
+    @store_elasticsearch_log(SECURITY_ELASTICSEARCH_VECTOR_WRITER=True)
+    def test_input_request_to_error_page_should_be_logged_in_elasticsearch_backend_through_vector(self):
+        with capture_security_logs() as logged_data:
+            with self.assertLogs('security.vector', level='INFO') as cm:
+                with assert_raises(RuntimeError):
+                    self.get('/error/')
+                input_request_log = logged_data.input_request[0]
+                assert_equal(len(cm.output), 3)
+                request_log, error_log, response_log = cm.output
+
+                request_log_expected_data = {
+                    'slug': None,
+                    'release': None,
+                    'related_objects': [],
+                    'extra_data': {},
+                    'parent_log': None,
+                    'request_headers': {"Cookie": "[Filtered]"},
+                    'request_body': '',
+                    'user_id': None,
+                    'method': 'GET',
+                    'host': 'testserver',
+                    'path': '/error/',
+                    'queries': {},
+                    'is_secure': False,
+                    'ip': '127.0.0.1',
+                    'start': not_none_eq_obj,
+                    'view_slug': 'apps.test_security.views.error_view',
+                    'state': 'INCOMPLETE'
+                }
+                error_log_expoected_data = {
+                    **request_log_expected_data,
+                    'error_message': not_none_eq_obj,
+                    'state': 'ERROR',
+                }
+                response_log_expected_data = {
+                    **error_log_expoected_data,
+                    'stop': not_none_eq_obj,
+                    'time': not_none_eq_obj,
+                    'response_body': not_none_eq_obj,
+                    'response_code': 500,
+                    'response_headers': not_none_eq_obj,
+                }
+
+                assert_equal_vector(
+                    request_log,
+                    'security-input-request-log',
+                    0,
+                    input_request_log.id,
+                    request_log_expected_data
+                )
+                assert_equal_vector(
+                    error_log,
+                    'security-input-request-log',
+                    1,
+                    input_request_log.id,
+                    error_log_expoected_data
+                )
+                assert_equal_vector(
                     response_log,
                     'security-input-request-log',
                     9999,

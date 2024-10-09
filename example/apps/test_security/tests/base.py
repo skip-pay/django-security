@@ -31,6 +31,17 @@ def test_call_command(*args, **kwargs):
     call_command(*args, **kwargs, stdout=StringIO(), stderr=StringIO())
 
 
+def assert_equal_vector(logstash_output, expected_index, expected_version, expected_logger_id, expected_data):
+    log_level, logger, data = logstash_output.split(':', 2)
+    assert_equal(log_level, "INFO")
+    assert_equal(logger, "security.vector")
+    result_data = json.loads(data)
+    assert_equal(result_data["version"], expected_version)
+    assert_equal(result_data["index_name"], expected_index)
+    assert_equal(result_data["logger_id"], str(expected_logger_id))
+    for k, v in expected_data.items():
+        assert_equal(result_data.get(k), v, f'Invalid data "{k}" ({result_data.get(k)} != {v})')
+
 def assert_equal_logstash(logstash_output, expected_index, expected_version, expected_logger_id, expected_data):
     prefix_and_index, version, logger_id, data = logstash_output.split(' ', 3)
     assert_equal(prefix_and_index, f'INFO:security.logstash:{expected_index}')
