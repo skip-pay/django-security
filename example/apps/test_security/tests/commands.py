@@ -9,7 +9,6 @@ from django.conf import settings as django_settings
 from django.test import override_settings
 from django.utils.timezone import now
 
-from germanium.test_cases.client import ClientTestCase
 from germanium.tools import (
     assert_equal, assert_false, assert_http_not_found, assert_http_ok, assert_http_redirect,
     assert_http_too_many_requests, assert_in, assert_is_none, assert_is_not_none, assert_not_in,
@@ -34,11 +33,11 @@ from security.backends.testing import capture_security_logs
 
 from apps.test_security.tasks import sum_task
 
-from .base import BaseTestCaseMixin, test_call_command
+from .base import BaseTestCase, test_call_command
 
 
 @override_settings(SECURITY_BACKEND_WRITERS={})
-class CommandTestCase(BaseTestCaseMixin, ClientTestCase):
+class CommandTestCase(BaseTestCase):
 
     SQL_LOG_MODELS = {
         'input-request': SQLInputRequestLog,

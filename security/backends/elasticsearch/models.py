@@ -6,6 +6,7 @@ from django.db import router
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth import get_user_model
 from django.utils.functional import cached_property
+from django.utils.timezone import now
 from django.core.serializers.json import DjangoJSONEncoder
 
 from elasticsearch_dsl import Q
@@ -241,6 +242,7 @@ class CeleryTaskInvocationLog(CeleryTaskInvocationLogStrMixin, PartitionedLog):
     def last_run(self):
         runs = CeleryTaskRunLog.search().filter(
             Q('term', celery_task_id=self.celery_task_id)
+            & Q('range', start={"gt": self.start or now()})  # Task run follows after invocation
         ).sort('-start').execute()
         return runs[0] if runs else None
 

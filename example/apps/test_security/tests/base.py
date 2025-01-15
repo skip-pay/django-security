@@ -4,7 +4,8 @@ from io import StringIO
 from django.contrib.auth.models import User
 
 from germanium.decorators import data_provider
-from germanium.tools import assert_equal, assert_false, assert_is_not_none
+from germanium.test_cases.client import ClientTestCase
+from germanium.tools import assert_equal
 
 from security.backends.elasticsearch.models import PartitionedLog
 from security.management import call_command
@@ -13,8 +14,7 @@ from security.management import call_command
 TRUNCATION_CHAR = '…'
 
 
-class BaseTestCaseMixin:
-
+class BaseTestCase(ClientTestCase):
     databases = ['default', 'security']
 
     def __init__(self, *args, **kwargs):
@@ -24,7 +24,6 @@ class BaseTestCaseMixin:
     @data_provider
     def create_user(self, username='test', email='test@localhost'):
         return User.objects._create_user(username, email, 'test', is_staff=True, is_superuser=True)
-
 
 
 def test_call_command(*args, **kwargs):
@@ -41,6 +40,7 @@ def assert_equal_vector(logstash_output, expected_index, expected_version, expec
     assert_equal(result_data["logger_id"], str(expected_logger_id))
     for k, v in expected_data.items():
         assert_equal(result_data.get(k), v, f'Invalid data "{k}" ({result_data.get(k)} != {v})')
+
 
 def assert_equal_logstash(logstash_output, expected_index, expected_version, expected_logger_id, expected_data):
     prefix_and_index, version, logger_id, data = logstash_output.split(' ', 3)

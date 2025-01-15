@@ -7,7 +7,6 @@ from django.test import override_settings
 from django.utils.encoding import force_str
 
 from germanium.decorators import data_consumer
-from germanium.test_cases.client import ClientTestCase
 from germanium.tools import (
     assert_equal, assert_false, assert_http_not_found, assert_http_ok, assert_http_redirect,
     assert_http_too_many_requests, assert_in, assert_is_none, assert_is_not_none, assert_not_in,
@@ -28,11 +27,11 @@ from security.backends.signals import (
 from security.backends.testing import capture_security_logs
 from security.utils import get_object_triple
 
-from .base import BaseTestCaseMixin, TRUNCATION_CHAR, assert_equal_logstash, assert_equal_log_data, assert_equal_vector
+from .base import BaseTestCase, TRUNCATION_CHAR, assert_equal_logstash, assert_equal_log_data, assert_equal_vector
 
 
 @override_settings(SECURITY_BACKEND_WRITERS={}, SECURITY_LOG_RESPONSE_BODY_CONTENT_TYPES=None)
-class InputRequestLogTestCase(BaseTestCaseMixin, ClientTestCase):
+class InputRequestLogTestCase(BaseTestCase):
 
     def test_input_request_to_homepage_should_be_logged(self):
         expected_input_request_started_data = {

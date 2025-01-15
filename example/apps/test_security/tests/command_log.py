@@ -6,7 +6,6 @@ from django.contrib.auth.models import User
 from django.test import override_settings
 
 from germanium.decorators import data_consumer
-from germanium.test_cases.client import ClientTestCase
 from germanium.tools import (
     assert_equal, assert_false, assert_http_not_found, assert_http_ok, assert_http_redirect,
     assert_http_too_many_requests, assert_in, assert_is_none, assert_is_not_none, assert_not_in,
@@ -26,11 +25,11 @@ from security.backends.reader import get_logs_related_with_object
 from security.backends.testing import capture_security_logs
 from security.utils import get_object_triple
 
-from .base import BaseTestCaseMixin, TRUNCATION_CHAR, test_call_command, assert_equal_logstash, assert_equal_log_data
+from .base import BaseTestCase, TRUNCATION_CHAR, test_call_command, assert_equal_logstash, assert_equal_log_data
 
 
 @override_settings(SECURITY_BACKEND_WRITERS={})
-class CommandLogTestCase(BaseTestCaseMixin, ClientTestCase):
+class CommandLogTestCase(BaseTestCase):
 
     def test_command_should_be_logged(self):
         expected_command_started_data = {

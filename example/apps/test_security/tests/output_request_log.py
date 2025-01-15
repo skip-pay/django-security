@@ -6,7 +6,6 @@ from requests.exceptions import ConnectionError
 from django.test import override_settings
 
 from germanium.decorators import data_consumer
-from germanium.test_cases.client import ClientTestCase
 from germanium.tools import (
     assert_equal, assert_raises, assert_not_in, assert_in, assert_equal_model_fields, assert_is_not_none,
     assert_length_equal, all_eq_obj, not_none_eq_obj
@@ -24,11 +23,11 @@ from security.backends.elasticsearch.tests import store_elasticsearch_log
 from security.backends.testing import capture_security_logs
 from security.utils import get_object_triple
 
-from .base import BaseTestCaseMixin, TRUNCATION_CHAR, assert_equal_logstash, assert_equal_log_data
+from .base import BaseTestCase, TRUNCATION_CHAR, assert_equal_logstash, assert_equal_log_data
 
 
 @override_settings(SECURITY_BACKEND_WRITERS={})
-class OutputRequestLogTestCase(BaseTestCaseMixin, ClientTestCase):
+class OutputRequestLogTestCase(BaseTestCase):
 
     @responses.activate
     @data_consumer('create_user')

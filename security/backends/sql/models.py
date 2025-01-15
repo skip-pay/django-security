@@ -5,7 +5,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.utils.encoding import force_str
 from django.utils.functional import cached_property
-from django.utils.timezone import localtime
+from django.utils.timezone import localtime, now
 
 from generic_m2m_field.models import MultipleDBGenericManyToManyField
 
@@ -365,7 +365,9 @@ class CeleryTaskInvocationLog(CeleryTaskInvocationLogStrMixin, Log):
 
     @property
     def last_run(self):
-        return CeleryTaskRunLog.objects.filter(celery_task_id=self.celery_task_id).first()
+        return CeleryTaskRunLog.objects.filter(
+            celery_task_id=self.celery_task_id, start__gt=self.start or now()
+        ).first()
 
     @property
     def first_run(self):
