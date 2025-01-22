@@ -369,10 +369,14 @@ class ElasticsearchBackendWriter(BaseBackendWriter):
         )
 
     def set_stale_celery_task_log_state(self):
-        processsing_stale_tasks = CeleryTaskInvocationLog.search().filter(
-            Q('range', stale_at={'lt': now()}) & Q('term', state=CeleryTaskInvocationLogState.TRIGGERED.name)
+        time_now = now()
+        processing_stale_tasks = CeleryTaskInvocationLog.search().filter(
+            Q('range', stale_at={
+                'lt': time_now,
+                'gt': time_now - timedelta(days=settings.SET_STALE_CELERY_AGE_DAYS_LIMIT_PER_RUN)
+            }) & Q('term', state=CeleryTaskInvocationLogState.TRIGGERED.name)
         ).sort('stale_at')
-        for task in processsing_stale_tasks[:settings.SET_STALE_CELERY_INVOCATIONS_LIMIT_PER_RUN]:
+        for task in processing_stale_tasks[:settings.SET_STALE_CELERY_INVOCATIONS_LIMIT_PER_RUN]:
             task_last_run = task.last_run
             if task_last_run and task_last_run.state == CeleryTaskRunLogState.SUCCEEDED:
                 self.get_data_writer().update_index(
@@ -388,7 +392,7 @@ class ElasticsearchBackendWriter(BaseBackendWriter):
                     stop=task_last_run.stop,
                     time=(task_last_run.stop - task.start).total_seconds()
                 )
-            else:
+            elif task_last_run is None or task_last_run.state != CeleryTaskInvocationLogState.EXPIRED:
                 try:
                     task_args = json.loads(task.task_args)
                     task_kwargs = json.loads(task.task_kwargs)

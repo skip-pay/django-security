@@ -15,7 +15,6 @@ from freezegun import freeze_time
 from celery.exceptions import TimeoutError
 
 from germanium.decorators import data_consumer
-from germanium.test_cases.client import ClientTestCase
 from germanium.tools import (
     assert_equal, assert_false, assert_http_not_found, assert_http_ok, assert_http_redirect,
     assert_http_too_many_requests, assert_in, assert_is_none, assert_is_not_none, assert_not_in,
@@ -49,11 +48,11 @@ from apps.test_security.tasks import (
     acks_late_with_no_failure_or_timeout_acknowledgement
 )
 
-from .base import BaseTestCaseMixin, TRUNCATION_CHAR, test_call_command, assert_equal_logstash, assert_equal_log_data, assert_equal_vector
+from .base import BaseTestCase, TRUNCATION_CHAR, test_call_command, assert_equal_logstash, assert_equal_log_data, assert_equal_vector
 
 
 @override_settings(SECURITY_BACKEND_WRITERS={})
-class CeleryLogTestCase(BaseTestCaseMixin, ClientTestCase):
+class CeleryLogTestCase(BaseTestCase):
 
     @data_consumer('create_user')
     @override_settings(SECURITY_BACKEND_READER='testing')
@@ -1446,6 +1445,68 @@ class CeleryLogTestCase(BaseTestCaseMixin, ClientTestCase):
                             id=logged_data.celery_task_invocation[0].id
                         ).state,
                         CeleryTaskInvocationLogState.SUCCEEDED
+                    )
+
+    @store_elasticsearch_log(DJANGO_CELERY_EXTENSIONS_DEFAULT_TASK_STALE_TIME_LIMIT=30)
+    def test_set_celery_task_log_state_should_set_task_to_expired_with_elasticsearch_backend(self):
+        with capture_security_logs() as logged_data:
+            unique_task.apply_async()
+            ElasticsearchCeleryTaskInvocationLog.get(
+                id=logged_data.celery_task_invocation[0].id
+            ).update(state=CeleryTaskInvocationLogState.TRIGGERED)
+            ElasticsearchCeleryTaskRunLog.get(
+                id=logged_data.celery_task_run[0].id
+            ).update(state=CeleryTaskRunLogState.ACTIVE)
+            ElasticsearchCeleryTaskInvocationLog._index.refresh()
+            ElasticsearchCeleryTaskRunLog._index.refresh()
+
+            # Update index increase version over the maximum
+            with mock.patch('security.backends.elasticsearch.writer.MAX_VERSION', 10001):
+                test_call_command('set_celery_task_log_state')
+                assert_equal(
+                    ElasticsearchCeleryTaskInvocationLog.get(
+                        id=logged_data.celery_task_invocation[0].id
+                    ).state, CeleryTaskInvocationLogState.TRIGGERED
+                )
+
+                with freeze_time(now() + timedelta(days=1, seconds=30)):
+                    test_call_command('set_celery_task_log_state')
+                    assert_equal(
+                        ElasticsearchCeleryTaskInvocationLog.get(
+                            id=logged_data.celery_task_invocation[0].id
+                        ).state,
+                        CeleryTaskInvocationLogState.EXPIRED
+                    )
+
+    @store_elasticsearch_log(DJANGO_CELERY_EXTENSIONS_DEFAULT_TASK_STALE_TIME_LIMIT=30)
+    def test_set_celery_task_log_state_should_stay_triggered_with_elasticsearch_backend(self):
+        with capture_security_logs() as logged_data:
+            unique_task.apply_async()
+            ElasticsearchCeleryTaskInvocationLog.get(
+                id=logged_data.celery_task_invocation[0].id
+            ).update(state=CeleryTaskInvocationLogState.TRIGGERED)
+            ElasticsearchCeleryTaskRunLog.get(
+                id=logged_data.celery_task_run[0].id
+            ).update(state=CeleryTaskRunLogState.ACTIVE)
+            ElasticsearchCeleryTaskInvocationLog._index.refresh()
+            ElasticsearchCeleryTaskRunLog._index.refresh()
+
+            # Update index increase version over the maximum
+            with mock.patch('security.backends.elasticsearch.writer.MAX_VERSION', 10001):
+                test_call_command('set_celery_task_log_state')
+                assert_equal(
+                    ElasticsearchCeleryTaskInvocationLog.get(
+                        id=logged_data.celery_task_invocation[0].id
+                    ).state, CeleryTaskInvocationLogState.TRIGGERED
+                )
+
+                with freeze_time(now() + timedelta(days=40, seconds=30)):
+                    test_call_command('set_celery_task_log_state')
+                    assert_equal(
+                        ElasticsearchCeleryTaskInvocationLog.get(
+                            id=logged_data.celery_task_invocation[0].id
+                        ).state,
+                        CeleryTaskInvocationLogState.TRIGGERED
                     )
 
     def test_acks_late_with_no_failure_or_timeout_acknowledgement_celery_task_should_not_log_invocation_error(self):

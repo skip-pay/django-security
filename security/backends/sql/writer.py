@@ -5,13 +5,12 @@ import math
 
 from io import TextIOWrapper
 
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
 from django.core import serializers
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import router, transaction
-from django.utils.timezone import utc
-from django.utils.timezone import now
+from django.utils.timezone import now, utc
 from django.utils.module_loading import import_string
 
 from celery import current_app
@@ -218,10 +217,13 @@ class SQLBackendWriter(BaseBackendWriter):
         )
 
     def set_stale_celery_task_log_state(self):
-        processsing_stale_tasks = CeleryTaskInvocationLog.objects.filter_processing(
-            stale_at__lt=now()
+        processing_stale_tasks = CeleryTaskInvocationLog.objects.filter_processing(
+            stale_at__lt=now(),
+            stale_at__gt=now() - timedelta(days=settings.SET_STALE_CELERY_AGE_DAYS_LIMIT_PER_RUN),
+            state=CeleryTaskInvocationLogState.TRIGGERED
         ).order_by('stale_at')
-        for task in processsing_stale_tasks[:settings.SET_STALE_CELERY_INVOCATIONS_LIMIT_PER_RUN]:
+
+        for task in processing_stale_tasks[:settings.SET_STALE_CELERY_INVOCATIONS_LIMIT_PER_RUN]:
             task_last_run = task.last_run
             if task_last_run and task_last_run.state == CeleryTaskRunLogState.SUCCEEDED:
                 change_and_save(
@@ -241,7 +243,7 @@ class SQLBackendWriter(BaseBackendWriter):
                     version=MAX_VERSION,
                     update_only_changed_fields=True
                 )
-            else:
+            elif task_last_run is None or task_last_run.state != CeleryTaskRunLogState.EXPIRED:
                 try:
                     current_app.tasks[task.name].expire_invocation(
                         task.id,
