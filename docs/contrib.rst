@@ -3,32 +3,6 @@ Extra
 
 Django-security-logger provides extra features to improve your logged data.
 
-security.contrib.reversion_log
-------------------------------
-
-If you have installed ``django-reversion`` it is possible to relate input logged requests with concrete object change. Firstly you must add extension to your ``INSTALLED_APPS`` setting::
-
-
-    INSTALLED_APPS = (
-        ...
-        'security.contrib.reversion_log',
-        ...
-    )
-
-
-For ``django-reversion`` version older than 2.x you must add middleware ``security.contrib.reversion_log.middleware.RevisionLogMiddleware`` too::
-
-    MIDDLEWARE = (
-        ...
-        'django.contrib.auth.middleware.AuthenticationMiddleware',
-        'security.middleware.LogMiddleware',
-        'security.contrib.reversion_log.middleware.RevisionLogMiddleware',
-        ...
-    )
-
-Input logged requests and reversion revision objects are related via m2m model ``security.contrib.reversion_log.models.InputRequestRevision``
-
-
 security.contrib.debug_toolbar_log
 ----------------------------------
 
@@ -36,7 +10,7 @@ If you are using ``django-debug-toolbar`` you can log toolbar results with logge
 
     INSTALLED_APPS = (
         ...
-        'security.contrib.reversion_log',
+        'security.contrib.debug_toolbar_log',
         ...
     )
 

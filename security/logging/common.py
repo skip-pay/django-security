@@ -6,8 +6,6 @@ from uuid import uuid4
 
 from contextlib import ContextDecorator
 
-from django.conf import settings as django_settings
-
 from security.config import settings
 from security.utils import get_object_triple
 
@@ -52,10 +50,6 @@ class SecurityLogger(ContextDecorator, local):
         if self.store:
             SecurityLogger.loggers.append(self)
 
-            if 'reversion' in django_settings.INSTALLED_APPS:
-                from reversion.signals import post_revision_commit
-
-                post_revision_commit.connect(self._post_revision_commit, weak=False)
         self.backend_logs = {}
         self.stream = None
 
@@ -94,26 +88,6 @@ class SecurityLogger(ContextDecorator, local):
             raise RuntimeError('Log already finished')
 
         SecurityLogger.loggers.pop()
-        if 'reversion' in django_settings.INSTALLED_APPS:
-            from reversion.signals import post_revision_commit
-
-            post_revision_commit.disconnect(self._post_revision_commit)
-
-    def _post_revision_commit(self, **kwargs):
-        """
-        Called as a post save of revision model of the reversion library.
-        If log context manager is active input logged request, command
-        log or celery task run log is joined with revision via related objects.
-        """
-        reversion_data = self._extra_data['reversion'] = self._extra_data.get('reversion', {
-            'revisions': [],
-            'total_count': 0
-        })
-        if reversion_data['total_count'] < settings.LOG_MAX_REVISIONS_COUNT:
-            reversion_data['revisions'].append({
-                'id': kwargs['revision_id'] if 'revision_id' in kwargs else kwargs['revision'].id
-            })
-        reversion_data['total_count'] += 1
 
     def to_dict(self):
         return dict(

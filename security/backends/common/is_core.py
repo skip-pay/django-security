@@ -7,8 +7,6 @@ from django.template.defaultfilters import truncatechars
 from django.utils.translation import gettext_lazy as _
 from django.utils.html import mark_safe
 
-from chamber.shortcuts import get_object_or_none
-
 from pyston.utils.decorators import filter_by, order_by
 
 from is_core.generic_views.detail_views import DjangoReadonlyDetailView
@@ -175,32 +173,6 @@ class LogCoreMixin:
     def display_related_objects(self, obj, request):
         return render_model_objects_with_link(request, self._get_related_objects(obj))
 
-    @short_description(_('revisions'))
-    def revisions(self, obj, request):
-        try:
-            from reversion.models import get_revision_or_none
-        except ImportError:
-            def get_revision_or_none(id):
-                try:
-                    from reversion.models import Revision
-                    return get_object_or_none(Revision, pk=id)
-                except ImportError:
-                    return None
-
-        if 'reversion' in obj.extra_data:
-            reversion_data = obj.extra_data['reversion']
-            revisions_display = []
-            for revision_data in reversion_data['revisions']:
-                revision_obj = get_revision_or_none(revision_data['id'])
-                revision_with_link = render_model_object_with_link(request, revision_obj) if revision_obj else None
-                if revision_with_link:
-                    revisions_display.append(revision_with_link)
-            if len(reversion_data['revisions']) != reversion_data['total_count']:
-                revisions_display.append('…')
-            return revisions_display
-        else:
-            return None
-
     def _get_extra_data_dict(self, obj):
         return obj.extra_data
 
@@ -302,7 +274,7 @@ class InputRequestLogCoreMixin(RequestLogCoreMixin):
             (_('relations'), {
                 'fieldsets': (
                     (None, {'fields': (
-                        'revisions', 'display_source', 'display_related_objects'
+                        'display_source', 'display_related_objects'
                     )}),
                     (_('output requests'), {'inline_view': self.output_request_inline_table_view}),
                     (_('commands'), {'inline_view': self.command_inline_table_view}),
@@ -397,7 +369,7 @@ class CommandLogCoreMixin(OutputLogCoreMixin, LogCoreMixin):
             (_('relations'), {
                 'fieldsets': (
                     (None, {'fields': (
-                        'revisions', 'display_source', 'display_related_objects'
+                        'display_source', 'display_related_objects'
                     )}),
                     (_('output requests'), {'inline_view': self.output_request_inline_table_view}),
                     (_('commands'), {'inline_view': self.command_inline_table_view}),
@@ -465,7 +437,7 @@ class CeleryTaskRunLogCoreMixin(OutputLogCoreMixin, CeleryCoreMixin, LogCoreMixi
             (_('relations'), {
                 'fieldsets': (
                     (None, {'fields': (
-                        'revisions', 'display_related_objects',
+                        'display_related_objects',
                     )}),
                     (_('output requests'), {'inline_view': self.output_request_inline_table_view}),
                     (_('commands'), {'inline_view': self.command_inline_table_view}),

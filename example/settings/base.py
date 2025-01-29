@@ -98,7 +98,6 @@ MIDDLEWARE = (
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'security.middleware.LogMiddleware',
-    'reversion.middleware.RevisionMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 )
 
@@ -124,7 +123,6 @@ INSTALLED_APPS = (
     'security.backends.logging.app.SecurityLoggingBackend',
     'security.backends.elasticsearch.app.SecurityElasticsearchBackend',
     'security.backends.testing.app.SecurityTestingBackend',
-    'reversion',
     'apps.test_security',
 )
 
