@@ -2,7 +2,6 @@ Django~=4.2
 skip-django-germanium==2.4.0
 flake8==5.0.4
 coveralls==3.3.1
-django-reversion==4.0.2
 responses==0.22.0
 celery==5.2.7
 freezegun==0.3.12

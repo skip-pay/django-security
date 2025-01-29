@@ -178,10 +178,6 @@ msgstr "zdroj"
 msgid "related objects"
 msgstr "vztažené objekty"
 
-#: backends/common/is_core.py:179
-msgid "revisions"
-msgstr "datové změny"
-
 #: backends/common/is_core.py:285
 msgid "input request log"
 msgstr "vstupní logovaný dotaz"

@@ -263,13 +263,6 @@ class CeleryLogTestCase(BaseTestCase):
                 assert_length_equal(logged_data.celery_task_run_started, 0)
                 assert_equal(logged_data.celery_task_invocation_duplicate[0].celery_task_id, unique_task_id)
 
-    def test_data_change_should_be_connected_with_celery_task_run_log(self):
-        with capture_security_logs() as logged_data:
-            get_django_command_task('create_user').apply_async()
-            assert_equal(
-                logged_data.celery_task_run[0].extra_data,
-                {'reversion': {'revisions': [{'id': not_none_eq_obj}], 'total_count': 1}}
-            )
 
     @override_settings(SECURITY_BACKEND_WRITERS={'sql'})
     @data_consumer('create_user')
