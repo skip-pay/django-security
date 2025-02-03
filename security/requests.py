@@ -8,8 +8,9 @@ from security.logging.requests.logger import OutputRequestLogger
 
 class SecuritySession(Session):
 
-    def __init__(self, slug=None, related_objects=None):
+    def __init__(self, slug=None, related_objects=None, logger_class=OutputRequestLogger):
         super().__init__()
+        self.logger_class = logger_class
         self.slug = slug
         self.related_objects = [] if related_objects is None else related_objects
 
@@ -18,7 +19,6 @@ class SecuritySession(Session):
                 json=None, slug=None, related_objects=None):
 
         related_objects = [] if related_objects is None else related_objects
-
         # Create the Request.
         req = Request(
             method=method.upper(), url=url, headers=headers, files=files, data=data or {}, json=json,
@@ -36,8 +36,8 @@ class SecuritySession(Session):
         }
         send_kwargs.update(request_settings)
 
-        with OutputRequestLogger(related_objects=related_objects or self.related_objects,
-                                 slug=slug or self.slug) as output_request_logger:
+        with self.logger_class(related_objects=related_objects or self.related_objects,
+                               slug=slug or self.slug) as output_request_logger:
             output_request_logger.log_request(prep)
             try:
                 response = self.send(prep, **send_kwargs)
