@@ -8,8 +8,9 @@ from security.logging.requests.logger import OutputRequestLogger
 
 class SecuritySession(Session):
 
-    def __init__(self, slug=None, related_objects=None, logger_class=OutputRequestLogger):
+    def __init__(self, slug=None, related_objects=None, logger_class=OutputRequestLogger, trust_env=False):
         super().__init__()
+        self.trust_env = trust_env
         self.logger_class = logger_class
         self.slug = slug
         self.related_objects = [] if related_objects is None else related_objects
