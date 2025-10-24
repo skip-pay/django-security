@@ -371,8 +371,7 @@ class ElasticsearchBackendWriter(BaseBackendWriter):
     def set_stale_celery_task_log_state(self):
         time_now = now()
         processing_stale_tasks = CeleryTaskInvocationLog.search().filter(
-            Q('range', stale_at={
-                'lt': time_now,
+            Q('range', stale_at={'lt': time_now}) & Q('range', start={
                 'gt': time_now - timedelta(days=settings.SET_STALE_CELERY_AGE_DAYS_LIMIT_PER_RUN)
             }) & Q('term', state=CeleryTaskInvocationLogState.TRIGGERED.name)
         ).sort('stale_at')

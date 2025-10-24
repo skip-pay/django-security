@@ -1493,7 +1493,7 @@ class CeleryLogTestCase(BaseTestCase):
                     ).state, CeleryTaskInvocationLogState.TRIGGERED
                 )
 
-                with freeze_time(now() + timedelta(days=40, seconds=30)):
+                with freeze_time(now() + timedelta(days=2, seconds=30)):
                     test_call_command('set_celery_task_log_state')
                     assert_equal(
                         ElasticsearchCeleryTaskInvocationLog.get(
