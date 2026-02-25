@@ -11,11 +11,11 @@ from enum import Enum
 
 from io import TextIOWrapper
 
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 
 from elasticsearch_dsl.utils import AttrDict, AttrList
 
-from django.utils.timezone import now, utc
+from django.utils.timezone import now
 from django.utils.module_loading import import_string
 from django.core.serializers.json import DjangoJSONEncoder
 
@@ -441,8 +441,8 @@ class ElasticsearchBackendWriter(BaseBackendWriter):
             step_timestamp = list(qs[0:1])[0].start
 
         while step_timestamp and step_timestamp < timestamp:
-            min_timestamp = datetime.combine(step_timestamp, time.min).replace(tzinfo=utc)
-            max_timestamp = datetime.combine(step_timestamp, time.max).replace(tzinfo=utc)
+            min_timestamp = datetime.combine(step_timestamp, time.min).replace(tzinfo=timezone.utc)
+            max_timestamp = datetime.combine(step_timestamp, time.max).replace(tzinfo=timezone.utc)
 
             qs_filtered_by_day = qs.filter(Q('range', start={'gte': min_timestamp, 'lte': max_timestamp})).sort(
                 'start', 'id'

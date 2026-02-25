@@ -1,9 +1,9 @@
-Django~=4.2
-skip-django-germanium==2.4.0
+Django~=5.2
+skip-django-germanium==2.6.0
 flake8==5.0.4
 coveralls==3.3.1
 responses==0.22.0
-celery==5.2.7
+celery==5.6.2
 freezegun==0.3.12
 elasticsearch-dsl==7.4.0
 skip-django-pyston==2.17.0
