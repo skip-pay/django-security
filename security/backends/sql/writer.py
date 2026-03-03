@@ -5,12 +5,12 @@ import math
 
 from io import TextIOWrapper
 
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 
 from django.core import serializers
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import router, transaction
-from django.utils.timezone import now, utc
+from django.utils.timezone import now
 from django.utils.module_loading import import_string
 
 from celery import current_app
@@ -290,9 +290,9 @@ class SQLBackendWriter(BaseBackendWriter):
         storage = import_string(settings.BACKUP_STORAGE_CLASS)()
 
         qs = get_log_model_from_logger_name(type).objects.filter(stop__lte=timestamp).order_by('stop')
-        for step_timestamp in qs.datetimes('start', 'day', tzinfo=utc):
-            min_timestamp = datetime.combine(step_timestamp, time.min).replace(tzinfo=utc)
-            max_timestamp = datetime.combine(step_timestamp, time.max).replace(tzinfo=utc)
+        for step_timestamp in qs.datetimes('start', 'day', tzinfo=timezone.utc):
+            min_timestamp = datetime.combine(step_timestamp, time.min).replace(tzinfo=timezone.utc)
+            max_timestamp = datetime.combine(step_timestamp, time.max).replace(tzinfo=timezone.utc)
             qs_filtered_by_day = qs.filter(stop__range=(min_timestamp, max_timestamp))
 
             for qs_batch in get_querysets_by_batch(qs_filtered_by_day, settings.CLEAN_LOGS_BACKUP_FILE_BATCH_SIZE):
