@@ -1,5 +1,4 @@
 import hashlib
-import time
 from datetime import timedelta
 
 from django.core.cache import cache
@@ -67,8 +66,7 @@ class PerRequestCacheThrottlingValidator(PerRequestThrottlingValidator):
 
     def _get_cache_key(self, request):
         ip = get_client_ip(request)[0] or ''
-        window = int(time.time() / self.timeframe)
-        raw = '{}:{}:{}:{}'.format(ip, request.method.upper(), request.path, window)
+        raw = f'{ip}.{request.method}.{request.path}'
         return 'throttle:req:{}'.format(hashlib.md5(raw.encode()).hexdigest())
 
     def _validate(self, request):
