@@ -1,5 +1,7 @@
+import hashlib
 from datetime import timedelta
 
+from django.core.cache import cache
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.urls import resolve, Resolver404
@@ -53,6 +55,28 @@ class PerRequestThrottlingValidator(ThrottlingValidator):
             view_slug=view_slug,
             exclude_log_id=current_logger.id if current_logger else None
         ) < self.throttle_at
+
+
+class PerRequestCacheThrottlingValidator(PerRequestThrottlingValidator):
+    """
+    Throttling validator that counts requests using Django's cache backend.
+    Unlike PerRequestThrottlingValidator, this doesn't rely on async input request logs,
+    making throttling effective immediately.
+    """
+
+    def _get_cache_key(self, request):
+        ip = get_client_ip(request)[0] or ''
+        raw = f'{ip}.{request.method}.{request.path}'
+        return 'throttle:req:{}'.format(hashlib.md5(raw.encode()).hexdigest())
+
+    def _validate(self, request):
+        key = self._get_cache_key(request)
+        try:
+            count = cache.incr(key)
+        except ValueError:
+            cache.set(key, 1, timeout=self.timeframe)
+            count = 1
+        return count <= self.throttle_at
 
 
 class LoginThrottlingValidator(ThrottlingValidator):
