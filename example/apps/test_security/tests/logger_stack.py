@@ -3,7 +3,7 @@ import threading
 from germanium.test_cases.default import GermaniumTestCase
 from germanium.tools import assert_equal, assert_is_none, assert_raises
 
-from security.logging.common import SecurityLogger, get_last_logger
+from security.logging.common import SecurityLogger, get_last_logger, loggers_stack
 
 from security.enums import LoggerName
 
@@ -25,20 +25,20 @@ class LoggerStackTestCase(GermaniumTestCase):
     """
 
     def test_logger_stack_should_be_empty_by_default(self):
-        assert_equal(SecurityLogger.loggers, ())
+        assert_equal(loggers_stack.get(), ())
 
     def test_nested_loggers_should_be_linked_to_parent_and_pop_in_order(self):
         with SecurityLogger() as outer:
             assert_is_none(outer.parent)
-            assert_equal(SecurityLogger.loggers, (outer,))
+            assert_equal(loggers_stack.get(), (outer,))
 
             with SecurityLogger() as inner:
                 assert_equal(inner.parent, outer)
-                assert_equal(SecurityLogger.loggers, (outer, inner))
+                assert_equal(loggers_stack.get(), (outer, inner))
 
-            assert_equal(SecurityLogger.loggers, (outer,))
+            assert_equal(loggers_stack.get(), (outer,))
 
-        assert_equal(SecurityLogger.loggers, ())
+        assert_equal(loggers_stack.get(), ())
 
     def test_logger_closed_out_of_order_should_raise(self):
         with SecurityLogger() as outer:
@@ -52,7 +52,7 @@ class LoggerStackTestCase(GermaniumTestCase):
 
         with SecurityLogger() as outer:
             not_stored = NotStoredLogger()
-            assert_equal(SecurityLogger.loggers, (outer,))
+            assert_equal(loggers_stack.get(), (outer,))
 
             with SecurityLogger() as inner:
                 assert_equal(inner.parent, outer)
@@ -80,7 +80,7 @@ class LoggerStackTestCase(GermaniumTestCase):
             try:
                 with SecurityLogger() as logger:
                     parents.append(logger.parent)
-                    assert_equal(SecurityLogger.loggers, (logger,))
+                    assert_equal(loggers_stack.get(), (logger,))
                     both_opened.wait(timeout=5)
             except Exception as ex:
                 errors.append(ex)
@@ -93,19 +93,19 @@ class LoggerStackTestCase(GermaniumTestCase):
 
         assert_equal(errors, [])
         assert_equal(parents, [None] * thread_count)
-        assert_equal(SecurityLogger.loggers, ())
+        assert_equal(loggers_stack.get(), ())
 
     def test_logger_opened_in_thread_should_not_leak_to_other_threads(self):
         seen_in_thread = []
 
         with SecurityLogger() as outer:
             def read_stack():
-                seen_in_thread.append(SecurityLogger.loggers)
+                seen_in_thread.append(loggers_stack.get())
 
             thread = threading.Thread(target=read_stack)
             thread.start()
             thread.join(timeout=10)
 
-            assert_equal(SecurityLogger.loggers, (outer,))
+            assert_equal(loggers_stack.get(), (outer,))
 
         assert_equal(seen_in_thread, [()])

@@ -17,29 +17,18 @@ undefined = object()
 # A ContextVar isolates the stack per thread and per asyncio task. The value is an
 # immutable tuple so that the default is never mutated in place and contexts cannot
 # share a list by reference.
-_loggers_stack = ContextVar('security_loggers', default=())
-
-
-class _LoggersStack:
-    """
-    Read-only access to the current logger stack via ``SecurityLogger.loggers``,
-    kept for backward compatibility. Returns a tuple, not a mutable list.
-    """
-
-    def __get__(self, obj, objtype=None):
-        return _loggers_stack.get()
+loggers_stack = ContextVar('security_loggers', default=())
 
 
 class SecurityLogger(ContextDecorator):
 
-    loggers = _LoggersStack()
     logger_name = None
     store = True
 
     def __init__(self, id=None, parent_log=undefined, related_objects=None, slug=None, extra_data=None,
                  start=None, stop=None, error_message=None, time=None, release=None):
         self.id = id or (uuid4() if self.logger_name else None)
-        loggers = _loggers_stack.get()
+        loggers = loggers_stack.get()
         self.parent = loggers[-1] if loggers else None
 
         self.related_objects = set()
@@ -66,7 +55,7 @@ class SecurityLogger(ContextDecorator):
             self._extra_data = self.parent.extra_data if self.parent else {}
 
         if self.store:
-            _loggers_stack.set(_loggers_stack.get() + (self,))
+            loggers_stack.set(loggers + (self,))
 
         self.backend_logs = {}
         self.stream = None
@@ -102,11 +91,11 @@ class SecurityLogger(ContextDecorator):
         self._extra_data.update(data)
 
     def close(self):
-        loggers = _loggers_stack.get()
+        loggers = loggers_stack.get()
         if not loggers or loggers[-1] != self:
             raise RuntimeError('Log already finished')
 
-        _loggers_stack.set(loggers[:-1])
+        loggers_stack.set(loggers[:-1])
 
     def to_dict(self):
         return dict(
@@ -119,7 +108,7 @@ class SecurityLogger(ContextDecorator):
 
 
 def get_last_logger(name):
-    for logger in reversed(_loggers_stack.get()):
+    for logger in reversed(loggers_stack.get()):
         if logger.logger_name == name:
             return logger
     return None
