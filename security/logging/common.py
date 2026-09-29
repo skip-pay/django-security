@@ -1,6 +1,6 @@
 import copy
 
-from threading import local
+from contextvars import ContextVar
 
 from uuid import uuid4
 
@@ -12,17 +12,24 @@ from security.utils import get_object_triple
 
 undefined = object()
 
+# Stack of currently open loggers, used to link a logger to its parent.
+#
+# A ContextVar isolates the stack per thread and per asyncio task. The value is an
+# immutable tuple so that the default is never mutated in place and contexts cannot
+# share a list by reference.
+loggers_stack = ContextVar('security_loggers', default=())
 
-class SecurityLogger(ContextDecorator, local):
 
-    loggers = []
+class SecurityLogger(ContextDecorator):
+
     logger_name = None
     store = True
 
     def __init__(self, id=None, parent_log=undefined, related_objects=None, slug=None, extra_data=None,
                  start=None, stop=None, error_message=None, time=None, release=None):
         self.id = id or (uuid4() if self.logger_name else None)
-        self.parent = SecurityLogger.loggers[-1] if SecurityLogger.loggers else None
+        loggers = loggers_stack.get()
+        self.parent = loggers[-1] if loggers else None
 
         self.related_objects = set()
         if related_objects:
@@ -48,7 +55,7 @@ class SecurityLogger(ContextDecorator, local):
             self._extra_data = self.parent.extra_data if self.parent else {}
 
         if self.store:
-            SecurityLogger.loggers.append(self)
+            loggers_stack.set(loggers + (self,))
 
         self.backend_logs = {}
         self.stream = None
@@ -84,10 +91,11 @@ class SecurityLogger(ContextDecorator, local):
         self._extra_data.update(data)
 
     def close(self):
-        if not SecurityLogger.loggers or SecurityLogger.loggers[-1] != self:
+        loggers = loggers_stack.get()
+        if not loggers or loggers[-1] != self:
             raise RuntimeError('Log already finished')
 
-        SecurityLogger.loggers.pop()
+        loggers_stack.set(loggers[:-1])
 
     def to_dict(self):
         return dict(
@@ -100,7 +108,7 @@ class SecurityLogger(ContextDecorator, local):
 
 
 def get_last_logger(name):
-    for logger in SecurityLogger.loggers[::-1]:
+    for logger in reversed(loggers_stack.get()):
         if logger.logger_name == name:
             return logger
     return None
