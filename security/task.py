@@ -18,6 +18,16 @@ from security.logging.celery.logger import CeleryTaskRunLogger, CeleryInvocation
 logger = logging.getLogger(__name__)
 
 
+class StaleTaskRunError(Exception):
+    """
+    Task run was still active when its invocation became stale. Its worker process was most likely killed
+    (e.g. by the hard time limit) before the run could log its result.
+    """
+
+    def __init__(self, message='Task run was still active when its invocation became stale'):
+        super().__init__(message)
+
+
 class LoggedResultWrapper(ResultWrapper):
 
     def __init__(self, *args, **kwargs):
@@ -165,6 +175,12 @@ class LoggedTask(DjangoTask):
                 'invocation_log_id': invocation_log_id
             }
         )
+
+    def fail_invocation(self, invocation_log_id, args, kwargs, logger_data, exc):
+        with CeleryInvocationLogger(id=invocation_log_id, **logger_data) as invocation_logger:
+            invocation_logger.log_failed()
+
+        self.on_task_failure(logger_data['celery_task_id'], args, kwargs, exc, None)
 
     def _apply_and_get_result(self, result, args, kwargs, invocation_id, is_async=False, headers=None, **options):
         headers = {} if headers is None else headers

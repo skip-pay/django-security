@@ -18,4 +18,4 @@ Logs can be removed only for ``elasticsearch`` and ``sql`` backends.
 set_celery_task_log_state
 -------------------------
 
-Set celery tasks which are in WAITING state. Tasks which were not started more than ``SECURITY_CELERY_STALE_TASK_TIME_LIMIT_MINUTES`` (by default 60 minutes) to the failed state. Task with succeeded/failed task run is set to succeeded/failed state.
+Set celery tasks which are in WAITING state. Tasks which were not started more than ``SECURITY_CELERY_STALE_TASK_TIME_LIMIT_MINUTES`` (by default 60 minutes) to the failed state. Task with succeeded/failed task run is set to succeeded/failed state. Task whose last run is still active (its worker process was killed, e.g. by the hard time limit) is set to failed state together with the run and its ``on_task_failure`` handler is called with ``StaleTaskRunError``.

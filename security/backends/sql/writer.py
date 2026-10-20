@@ -21,6 +21,7 @@ from chamber.shortcuts import change_and_save
 from security.backends.writer import BaseBackendWriter
 from security.config import settings
 from security.enums import RequestLogState, CeleryTaskInvocationLogState, CeleryTaskRunLogState, CommandState
+from security.task import StaleTaskRunError
 
 from .models import CeleryTaskInvocationLog, get_log_model_from_logger_name, get_response_state
 
@@ -216,6 +217,35 @@ class SQLBackendWriter(BaseBackendWriter):
             logger, state=CeleryTaskRunLogState.ACTIVE
         )
 
+    def _get_celery_task_invocation_logger_data(self, task):
+        return dict(
+            slug=task.slug,
+            parent_log=task.parent_log,
+            related_objects=[
+                (
+                    router.db_for_write(related_object.object_ct.model_class()),
+                    related_object.object_ct_id,
+                    related_object.object_id
+                ) for related_object in task.related_objects.all()
+            ],
+            start=task.start,
+            celery_task_id=task.celery_task_id,
+            stop=task.stop,
+            name=task.name,
+            queue_name=task.queue_name,
+            applied_at=task.applied_at,
+            triggered_at=task.triggered_at,
+            is_unique=task.is_unique,
+            is_async=task.is_async,
+            is_on_commit=task.is_on_commit,
+            input=task.input,
+            task_args=task.task_args,
+            task_kwargs=task.task_kwargs,
+            estimated_time_of_first_arrival=task.estimated_time_of_first_arrival,
+            expires_at=task.expires_at,
+            stale_at=task.stale_at,
+        )
+
     def set_stale_celery_task_log_state(self):
         processing_stale_tasks = CeleryTaskInvocationLog.objects.filter_processing(
             stale_at__lt=now(),
@@ -243,39 +273,39 @@ class SQLBackendWriter(BaseBackendWriter):
                     version=MAX_VERSION,
                     update_only_changed_fields=True
                 )
+            elif task_last_run and task_last_run.state == CeleryTaskRunLogState.ACTIVE:
+                exc = StaleTaskRunError()
+                change_and_save(
+                    task_last_run,
+                    state=CeleryTaskRunLogState.FAILED,
+                    stop=now(),
+                    error_message=str(exc),
+                    version=MAX_VERSION,
+                    update_only_changed_fields=True
+                )
+                try:
+                    current_app.tasks[task.name].fail_invocation(
+                        task.id,
+                        task.task_args,
+                        task.task_kwargs,
+                        self._get_celery_task_invocation_logger_data(task),
+                        exc
+                    )
+                except NotRegistered:
+                    change_and_save(
+                        task,
+                        state=CeleryTaskInvocationLogState.FAILED,
+                        stop=now(),
+                        version=MAX_VERSION,
+                        update_only_changed_fields=True
+                    )
             elif task_last_run is None or task_last_run.state != CeleryTaskRunLogState.EXPIRED:
                 try:
                     current_app.tasks[task.name].expire_invocation(
                         task.id,
                         task.task_args,
                         task.task_kwargs,
-                        dict(
-                            slug=task.slug,
-                            parent_log=task.parent_log,
-                            related_objects=[
-                                (
-                                    router.db_for_write(related_object.object_ct.model_class()),
-                                    related_object.object_ct_id,
-                                    related_object.object_id
-                                ) for related_object in task.related_objects.all()
-                            ],
-                            start=task.start,
-                            celery_task_id=task.celery_task_id,
-                            stop=task.stop,
-                            name=task.name,
-                            queue_name=task.queue_name,
-                            applied_at=task.applied_at,
-                            triggered_at=task.triggered_at,
-                            is_unique=task.is_unique,
-                            is_async=task.is_async,
-                            is_on_commit=task.is_on_commit,
-                            input=task.input,
-                            task_args=task.task_args,
-                            task_kwargs=task.task_kwargs,
-                            estimated_time_of_first_arrival=task.estimated_time_of_first_arrival,
-                            expires_at=task.expires_at,
-                            stale_at=task.stale_at,
-                        )
+                        self._get_celery_task_invocation_logger_data(task)
                     )
                 except NotRegistered:
                     change_and_save(

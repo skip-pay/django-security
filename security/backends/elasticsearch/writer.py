@@ -30,6 +30,7 @@ from security.enums import (
     RequestLogState, CeleryTaskInvocationLogState, CeleryTaskRunLogState, CommandState
 )
 from security.backends.writer import BaseBackendWriter
+from security.task import StaleTaskRunError
 
 from .models import (
     CeleryTaskInvocationLog, get_key_from_content_type_object_id_and_model_db, get_response_state,
@@ -368,6 +369,31 @@ class ElasticsearchBackendWriter(BaseBackendWriter):
             logger, state=CeleryTaskRunLogState.ACTIVE
         )
 
+    def _get_celery_task_invocation_logger_data(self, task):
+        return dict(
+            slug=task.slug,
+            parent_log=task.parent_log,
+            related_objects=[
+                get_object_triple_from_key(key) for key in task.related_objects or ()
+            ],
+            start=task.start,
+            celery_task_id=task.celery_task_id,
+            stop=task.stop,
+            name=task.name,
+            queue_name=task.queue_name,
+            applied_at=task.applied_at,
+            triggered_at=task.triggered_at,
+            is_unique=task.is_unique,
+            is_async=task.is_async,
+            is_on_commit=task.is_on_commit,
+            input=task.input,
+            task_args=json.loads(task.task_args),
+            task_kwargs=json.loads(task.task_kwargs),
+            estimated_time_of_first_arrival=task.estimated_time_of_first_arrival,
+            expires_at=task.expires_at,
+            stale_at=task.stale_at,
+        )
+
     def set_stale_celery_task_log_state(self):
         time_now = now()
         processing_stale_tasks = CeleryTaskInvocationLog.search().filter(
@@ -391,37 +417,39 @@ class ElasticsearchBackendWriter(BaseBackendWriter):
                     stop=task_last_run.stop,
                     time=(task_last_run.stop - task.start).total_seconds()
                 )
+            elif task_last_run and task_last_run.state == CeleryTaskRunLogState.ACTIVE:
+                exc = StaleTaskRunError()
+                stop = now()
+                self.get_data_writer().update_index(
+                    task_last_run,
+                    state=CeleryTaskRunLogState.FAILED,
+                    stop=stop,
+                    time=(stop - task_last_run.start).total_seconds(),
+                    error_message=str(exc)
+                )
+                try:
+                    logger_data = self._get_celery_task_invocation_logger_data(task)
+                    current_app.tasks[task.name].fail_invocation(
+                        task.id,
+                        logger_data['task_args'],
+                        logger_data['task_kwargs'],
+                        logger_data,
+                        exc
+                    )
+                except NotRegistered:
+                    self.get_data_writer().update_index(
+                        task,
+                        state=CeleryTaskInvocationLogState.FAILED,
+                        stop=now()
+                    )
             elif task_last_run is None or task_last_run.state != CeleryTaskInvocationLogState.EXPIRED:
                 try:
-                    task_args = json.loads(task.task_args)
-                    task_kwargs = json.loads(task.task_kwargs)
+                    logger_data = self._get_celery_task_invocation_logger_data(task)
                     current_app.tasks[task.name].expire_invocation(
                         task.id,
-                        task_args,
-                        task_kwargs,
-                        dict(
-                            slug=task.slug,
-                            parent_log=task.parent_log,
-                            related_objects=[
-                                get_object_triple_from_key(key) for key in task.related_objects or ()
-                            ],
-                            start=task.start,
-                            celery_task_id=task.celery_task_id,
-                            stop=task.stop,
-                            name=task.name,
-                            queue_name=task.queue_name,
-                            applied_at=task.applied_at,
-                            triggered_at=task.triggered_at,
-                            is_unique=task.is_unique,
-                            is_async=task.is_async,
-                            is_on_commit=task.is_on_commit,
-                            input=task.input,
-                            task_args=task_args,
-                            task_kwargs=task_kwargs,
-                            estimated_time_of_first_arrival=task.estimated_time_of_first_arrival,
-                            expires_at=task.expires_at,
-                            stale_at=task.stale_at,
-                        )
+                        logger_data['task_args'],
+                        logger_data['task_kwargs'],
+                        logger_data
                     )
                 except NotRegistered:
                     self.get_data_writer().update_index(
