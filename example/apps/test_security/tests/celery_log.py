@@ -41,6 +41,7 @@ from security.backends.signals import (
 )
 from security.backends.testing import capture_security_logs
 from security.backends.reader import get_logs_related_with_object
+from security.task import StaleTaskRunError
 from security.utils import get_object_triple
 
 from apps.test_security.tasks import (
@@ -1440,16 +1441,114 @@ class CeleryLogTestCase(BaseTestCase):
                         CeleryTaskInvocationLogState.SUCCEEDED
                     )
 
+    @override_settings(
+        SECURITY_BACKEND_WRITERS={'sql', 'logging'}, DJANGO_CELERY_EXTENSIONS_DEFAULT_TASK_STALE_TIME_LIMIT=30
+    )
+    def test_set_celery_task_log_state_should_set_task_with_active_run_to_failed_with_sql_backend(self):
+        unique_task.apply_async()
+
+        sql_celery_task_invocation_log = SQLCeleryTaskInvocationLog.objects.get()
+        sql_celery_task_run_log = SQLCeleryTaskRunLog.objects.get()
+        change_and_save(sql_celery_task_invocation_log, state=CeleryTaskInvocationLogState.TRIGGERED, version=5)
+        change_and_save(
+            sql_celery_task_run_log, state=CeleryTaskRunLogState.ACTIVE, stop=None, time=None, output='partial output',
+            version=5
+        )
+
+        test_call_command('set_celery_task_log_state')
+        sql_celery_task_invocation_log.refresh_from_db()
+        sql_celery_task_run_log.refresh_from_db()
+        assert_equal(sql_celery_task_invocation_log.state, CeleryTaskInvocationLogState.TRIGGERED)
+        assert_equal(sql_celery_task_run_log.state, CeleryTaskRunLogState.ACTIVE)
+
+        with freeze_time(now() + timedelta(seconds=30)):
+            with mock.patch.object(unique_task, 'on_task_failure') as on_task_failure_method:
+                with self.assertLogs('security.celery', level='INFO') as cm:
+                    test_call_command('set_celery_task_log_state')
+
+        sql_celery_task_invocation_log.refresh_from_db()
+        sql_celery_task_run_log.refresh_from_db()
+        assert_equal_model_fields(
+            sql_celery_task_invocation_log,
+            state=CeleryTaskInvocationLogState.FAILED,
+            stop=not_none_eq_obj,
+        )
+        assert_equal_model_fields(
+            sql_celery_task_run_log,
+            state=CeleryTaskRunLogState.FAILED,
+            stop=not_none_eq_obj,
+            time=not_none_eq_obj,
+            error_message='Task run was still active when its invocation became stale',
+            output='partial output',
+        )
+        assert_equal(on_task_failure_method.call_count, 1)
+        task_id, task_args, task_kwargs, exc, einfo = on_task_failure_method.call_args.args
+        assert_equal(task_id, sql_celery_task_invocation_log.celery_task_id)
+        assert_equal(task_args, [])
+        assert_equal(task_kwargs, {})
+        assert_true(isinstance(exc, StaleTaskRunError))
+        assert_is_none(einfo)
+        assert_equal(
+            cm.output,
+            [
+                f'INFO:security.celery:'
+                f'Celery task invocation "{sql_celery_task_invocation_log.id}" '
+                f'with celery id "{sql_celery_task_invocation_log.celery_task_id}" '
+                f'and name "unique_task" was failed',
+            ]
+        )
+
+    @override_settings(SECURITY_BACKEND_WRITERS={'sql'}, DJANGO_CELERY_EXTENSIONS_DEFAULT_TASK_STALE_TIME_LIMIT=30)
+    def test_set_celery_task_log_state_should_fail_unregistered_task_with_active_run_with_sql_backend(self):
+        unique_task.apply_async()
+
+        sql_celery_task_invocation_log = SQLCeleryTaskInvocationLog.objects.get()
+        sql_celery_task_run_log = SQLCeleryTaskRunLog.objects.get()
+        change_and_save(
+            sql_celery_task_invocation_log, state=CeleryTaskInvocationLogState.TRIGGERED, name='unregistered_task',
+            version=5
+        )
+        change_and_save(sql_celery_task_run_log, state=CeleryTaskRunLogState.ACTIVE, stop=None, time=None, version=5)
+
+        with freeze_time(now() + timedelta(seconds=30)):
+            test_call_command('set_celery_task_log_state')
+
+        sql_celery_task_invocation_log.refresh_from_db()
+        sql_celery_task_run_log.refresh_from_db()
+        assert_equal(sql_celery_task_invocation_log.state, CeleryTaskInvocationLogState.FAILED)
+        assert_equal(sql_celery_task_run_log.state, CeleryTaskRunLogState.FAILED)
+
+    @override_settings(SECURITY_BACKEND_WRITERS={'sql'}, DJANGO_CELERY_EXTENSIONS_DEFAULT_TASK_STALE_TIME_LIMIT=30)
+    def test_set_celery_task_log_state_should_set_task_with_retried_run_to_expired_with_sql_backend(self):
+        unique_task.apply_async()
+
+        sql_celery_task_invocation_log = SQLCeleryTaskInvocationLog.objects.get()
+        sql_celery_task_run_log = SQLCeleryTaskRunLog.objects.get()
+        change_and_save(sql_celery_task_invocation_log, state=CeleryTaskInvocationLogState.TRIGGERED, version=5)
+        change_and_save(sql_celery_task_run_log, state=CeleryTaskRunLogState.RETRIED, version=5)
+
+        with freeze_time(now() + timedelta(seconds=30)):
+            with mock.patch.object(unique_task, 'on_task_failure') as on_task_failure_method:
+                test_call_command('set_celery_task_log_state')
+
+        sql_celery_task_invocation_log.refresh_from_db()
+        sql_celery_task_run_log.refresh_from_db()
+        assert_equal(sql_celery_task_invocation_log.state, CeleryTaskInvocationLogState.EXPIRED)
+        assert_equal(sql_celery_task_run_log.state, CeleryTaskRunLogState.RETRIED)
+        assert_false(on_task_failure_method.called)
+
     @store_elasticsearch_log(DJANGO_CELERY_EXTENSIONS_DEFAULT_TASK_STALE_TIME_LIMIT=30)
-    def test_set_celery_task_log_state_should_set_task_to_expired_with_elasticsearch_backend(self):
+    def test_set_celery_task_log_state_should_set_task_with_active_run_to_failed_with_elasticsearch_backend(self):
         with capture_security_logs() as logged_data:
             unique_task.apply_async()
-            ElasticsearchCeleryTaskInvocationLog.get(
-                id=logged_data.celery_task_invocation[0].id
-            ).update(state=CeleryTaskInvocationLogState.TRIGGERED)
-            ElasticsearchCeleryTaskRunLog.get(
-                id=logged_data.celery_task_run[0].id
-            ).update(state=CeleryTaskRunLogState.ACTIVE)
+            invocation_log_id = logged_data.celery_task_invocation[0].id
+            run_log_id = logged_data.celery_task_run[0].id
+            ElasticsearchCeleryTaskInvocationLog.get(id=invocation_log_id).update(
+                state=CeleryTaskInvocationLogState.TRIGGERED
+            )
+            ElasticsearchCeleryTaskRunLog.get(id=run_log_id).update(
+                state=CeleryTaskRunLogState.ACTIVE, stop=None, time=None, output='partial output'
+            )
             ElasticsearchCeleryTaskInvocationLog._index.refresh()
             ElasticsearchCeleryTaskRunLog._index.refresh()
 
@@ -1457,19 +1556,136 @@ class CeleryLogTestCase(BaseTestCase):
             with mock.patch('security.backends.elasticsearch.writer.MAX_VERSION', 10001):
                 test_call_command('set_celery_task_log_state')
                 assert_equal(
-                    ElasticsearchCeleryTaskInvocationLog.get(
-                        id=logged_data.celery_task_invocation[0].id
-                    ).state, CeleryTaskInvocationLogState.TRIGGERED
+                    ElasticsearchCeleryTaskInvocationLog.get(id=invocation_log_id).state,
+                    CeleryTaskInvocationLogState.TRIGGERED
+                )
+                assert_equal(
+                    ElasticsearchCeleryTaskRunLog.get(id=run_log_id).state,
+                    CeleryTaskRunLogState.ACTIVE
                 )
 
                 with freeze_time(now() + timedelta(days=1, seconds=30)):
+                    with mock.patch.object(unique_task, 'on_task_failure') as on_task_failure_method:
+                        test_call_command('set_celery_task_log_state')
+
+            elasticsearch_celery_task_invocation_log = ElasticsearchCeleryTaskInvocationLog.get(id=invocation_log_id)
+            elasticsearch_celery_task_run_log = ElasticsearchCeleryTaskRunLog.get(id=run_log_id)
+            assert_equal(elasticsearch_celery_task_invocation_log.state, CeleryTaskInvocationLogState.FAILED)
+            assert_is_not_none(elasticsearch_celery_task_invocation_log.stop)
+            assert_equal(elasticsearch_celery_task_run_log.state, CeleryTaskRunLogState.FAILED)
+            assert_is_not_none(elasticsearch_celery_task_run_log.stop)
+            assert_is_not_none(elasticsearch_celery_task_run_log.time)
+            assert_equal(
+                elasticsearch_celery_task_run_log.error_message,
+                'Task run was still active when its invocation became stale'
+            )
+            assert_equal(elasticsearch_celery_task_run_log.output, 'partial output')
+            assert_equal(on_task_failure_method.call_count, 1)
+            task_id, task_args, task_kwargs, exc, einfo = on_task_failure_method.call_args.args
+            assert_equal(task_id, elasticsearch_celery_task_invocation_log.celery_task_id)
+            assert_equal(task_args, [])
+            assert_equal(task_kwargs, {})
+            assert_true(isinstance(exc, StaleTaskRunError))
+            assert_is_none(einfo)
+
+    @store_elasticsearch_log(DJANGO_CELERY_EXTENSIONS_DEFAULT_TASK_STALE_TIME_LIMIT=30)
+    def test_set_celery_task_log_state_should_set_task_with_active_run_to_failed_through_vector(self):
+        with capture_security_logs() as logged_data:
+            unique_task.apply_async()
+            invocation_log_id = logged_data.celery_task_invocation[0].id
+            run_log_id = logged_data.celery_task_run[0].id
+            ElasticsearchCeleryTaskInvocationLog.get(id=invocation_log_id).update(
+                state=CeleryTaskInvocationLogState.TRIGGERED
+            )
+            ElasticsearchCeleryTaskRunLog.get(id=run_log_id).update(
+                state=CeleryTaskRunLogState.ACTIVE, stop=None, time=None, output='partial output'
+            )
+            ElasticsearchCeleryTaskInvocationLog._index.refresh()
+            ElasticsearchCeleryTaskRunLog._index.refresh()
+
+            with override_settings(SECURITY_ELASTICSEARCH_VECTOR_WRITER=True):
+                with freeze_time(now() + timedelta(seconds=30)):
+                    with self.assertLogs('security.vector', level='INFO') as cm:
+                        test_call_command('set_celery_task_log_state')
+
+            failed_run, failed_invocation = [output for output in cm.output if '"security-celery-task-' in output]
+            assert_equal_vector(
+                failed_run,
+                'security-celery-task-run-log',
+                9999,
+                run_log_id,
+                {
+                    'name': 'unique_task',
+                    'state': 'FAILED',
+                    'stop': not_none_eq_obj,
+                    'time': not_none_eq_obj,
+                    'error_message': 'Task run was still active when its invocation became stale',
+                    'output': 'partial output',
+                }
+            )
+            assert_equal_vector(
+                failed_invocation,
+                'security-celery-task-invocation-log',
+                9999,
+                invocation_log_id,
+                {
+                    'name': 'unique_task',
+                    'state': 'FAILED',
+                    'stop': not_none_eq_obj,
+                }
+            )
+
+    @store_elasticsearch_log(DJANGO_CELERY_EXTENSIONS_DEFAULT_TASK_STALE_TIME_LIMIT=30)
+    def test_set_celery_task_log_state_should_fail_unregistered_task_with_active_run_with_elasticsearch_backend(self):
+        with capture_security_logs() as logged_data:
+            unique_task.apply_async()
+            invocation_log_id = logged_data.celery_task_invocation[0].id
+            run_log_id = logged_data.celery_task_run[0].id
+            ElasticsearchCeleryTaskInvocationLog.get(id=invocation_log_id).update(
+                state=CeleryTaskInvocationLogState.TRIGGERED, name='unregistered_task'
+            )
+            ElasticsearchCeleryTaskRunLog.get(id=run_log_id).update(
+                state=CeleryTaskRunLogState.ACTIVE, stop=None, time=None
+            )
+            ElasticsearchCeleryTaskInvocationLog._index.refresh()
+            ElasticsearchCeleryTaskRunLog._index.refresh()
+
+            # Update index increase version over the maximum
+            with mock.patch('security.backends.elasticsearch.writer.MAX_VERSION', 10001):
+                with freeze_time(now() + timedelta(seconds=30)):
                     test_call_command('set_celery_task_log_state')
-                    assert_equal(
-                        ElasticsearchCeleryTaskInvocationLog.get(
-                            id=logged_data.celery_task_invocation[0].id
-                        ).state,
-                        CeleryTaskInvocationLogState.EXPIRED
-                    )
+
+            assert_equal(
+                ElasticsearchCeleryTaskInvocationLog.get(id=invocation_log_id).state,
+                CeleryTaskInvocationLogState.FAILED
+            )
+            assert_equal(ElasticsearchCeleryTaskRunLog.get(id=run_log_id).state, CeleryTaskRunLogState.FAILED)
+
+    @store_elasticsearch_log(DJANGO_CELERY_EXTENSIONS_DEFAULT_TASK_STALE_TIME_LIMIT=30)
+    def test_set_celery_task_log_state_should_set_task_with_retried_run_to_expired_with_elasticsearch_backend(self):
+        with capture_security_logs() as logged_data:
+            unique_task.apply_async()
+            invocation_log_id = logged_data.celery_task_invocation[0].id
+            run_log_id = logged_data.celery_task_run[0].id
+            ElasticsearchCeleryTaskInvocationLog.get(id=invocation_log_id).update(
+                state=CeleryTaskInvocationLogState.TRIGGERED
+            )
+            ElasticsearchCeleryTaskRunLog.get(id=run_log_id).update(state=CeleryTaskRunLogState.RETRIED)
+            ElasticsearchCeleryTaskInvocationLog._index.refresh()
+            ElasticsearchCeleryTaskRunLog._index.refresh()
+
+            # Update index increase version over the maximum
+            with mock.patch('security.backends.elasticsearch.writer.MAX_VERSION', 10001):
+                with freeze_time(now() + timedelta(seconds=30)):
+                    with mock.patch.object(unique_task, 'on_task_failure') as on_task_failure_method:
+                        test_call_command('set_celery_task_log_state')
+
+            assert_equal(
+                ElasticsearchCeleryTaskInvocationLog.get(id=invocation_log_id).state,
+                CeleryTaskInvocationLogState.EXPIRED
+            )
+            assert_equal(ElasticsearchCeleryTaskRunLog.get(id=run_log_id).state, CeleryTaskRunLogState.RETRIED)
+            assert_false(on_task_failure_method.called)
 
     @store_elasticsearch_log(DJANGO_CELERY_EXTENSIONS_DEFAULT_TASK_STALE_TIME_LIMIT=30)
     def test_set_celery_task_log_state_should_stay_triggered_with_elasticsearch_backend(self):
